@@ -1,0 +1,3 @@
+[submodule "rtl/modules/fx68k"]
+	path = rtl/modules/fx68k
+	url = https://github.com/JTFPGA/fx68k.git
