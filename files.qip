@@ -5,5 +5,7 @@ set_global_assignment -name SDC_FILE mycore.sdc
 set_global_assignment -name SYSTEMVERILOG_FILE mycore.sv
 
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/dpramv.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/crtc.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/tilemap.sv
 
 set_global_assignment -name QIP_FILE rtl/fx68k.qip
