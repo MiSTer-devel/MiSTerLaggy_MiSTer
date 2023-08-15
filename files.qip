@@ -1,9 +1,7 @@
-set_global_assignment -name VERILOG_FILE rtl/lfsr.v
-set_global_assignment -name SYSTEMVERILOG_FILE rtl/cos.sv
-set_global_assignment -name SYSTEMVERILOG_FILE rtl/mycore.v
-set_global_assignment -name SDC_FILE mycore.sdc
-set_global_assignment -name SYSTEMVERILOG_FILE mycore.sv
+set_global_assignment -name SDC_FILE mrlaggy.sdc
+set_global_assignment -name SYSTEMVERILOG_FILE mrlaggy.sv
 
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/system.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/dpramv.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/crtc.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/tilemap.sv
