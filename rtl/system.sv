@@ -16,7 +16,11 @@ module system
 
 	output [7:0] r,
 	output [7:0] g,
-	output [7:0] b
+	output [7:0] b,
+
+	input [15:0] gamepad,
+	input [6:0] user_in,
+	output reg [6:0] user_out
 );
 
 reg phi1, phi2;
@@ -34,10 +38,12 @@ wire [1:0] cpu_ds_n;
 wire cpu_as_n;
 wire [2:0] cpu_fc;
 wire ram_sel = cpu_addr[23:16] == 8'h10;
+wire ticks_sel = cpu_addr[23:16] == 8'h20;
+wire user_sel = cpu_addr[23:16] == 8'h30;
+wire pad_sel = cpu_addr[23:16] == 8'h40;
 wire crtc_sel = cpu_addr[23:16] == 8'h80;
 wire tilemap_sel = cpu_addr[23:16] == 8'h90;
 wire pal_sel = cpu_addr[23:16] == 8'h91;
-wire ticks_sel = cpu_addr[23:16] == 8'h20;
 wire a1 = cpu_addr[1];
 
 wire [15:0] cpu_din = ram_sel ? ram_dout :
@@ -46,6 +52,8 @@ wire [15:0] cpu_din = ram_sel ? ram_dout :
 					  pal_sel ? pal_dout :
 					  (ticks_sel & a1) ? ticks_latch[15:0] :
 					  (ticks_sel & ~a1) ? ticks_latch[31:16] :
+					  user_sel ? { 9'd0, user_in[6:0] } :
+					  pad_sel ? { 1'd0, gamepad } :
 					  rom_dout;
 
 wire [15:0] cpu_dout;
@@ -87,10 +95,12 @@ end
 always_ff @(posedge clk) begin
 	if (ticks_sel & ~cpu_rw) ticks_latch <= ticks;
 	ticks <= ticks + 32'd1;
+
+	if (user_sel & ~cpu_rw & ~cpu_ds_n[0]) user_out <= cpu_dout[6:0];
 end
 
 reg [2:0] intp_prev;
-wire [2:0] intp = { 1'b0, ~VBlank, VBlank };
+wire [2:0] intp = { user_in[0], ~VBlank, VBlank };
 
 always_ff @(posedge clk) begin
 	if (reset) begin

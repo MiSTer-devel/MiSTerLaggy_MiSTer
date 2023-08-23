@@ -174,7 +174,6 @@ module emu
 ///////// Default values for ports not used in this core /////////
 
 assign ADC_BUS  = 'Z;
-assign USER_OUT = '1;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQMH, SDRAM_nWE, SDRAM_nCAS, SDRAM_nRAS, SDRAM_nCS} = 'Z;
@@ -223,6 +222,7 @@ wire forced_scandoubler;
 wire   [1:0] buttons;
 wire [127:0] status;
 wire  [10:0] ps2_key;
+wire  [31:0] gamepad;
 
 hps_io #(.CONF_STR(CONF_STR)) hps_io
 (
@@ -236,6 +236,8 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 	.buttons(buttons),
 	.status(status),
 	.status_menumask({status[5]}),
+
+	.joystick_0(gamepad),
 	
 	.ps2_key(ps2_key)
 );
@@ -277,7 +279,11 @@ system system
 
 	.r(VGA_R),
 	.g(VGA_G),
-	.b(VGA_B)
+	.b(VGA_B),
+
+	.gamepad(gamepad[15:0]),
+	.user_out(USER_OUT),
+	.user_in(USER_IN)
 );
 
 assign CLK_VIDEO = clk_sys;
