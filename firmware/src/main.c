@@ -145,10 +145,10 @@ int main(int argc, char *argv[])
     crtc->hs = 32;
     crtc->hbp = 40;
 
-    crtc->vact = 240;
-    crtc->vfp = 3;
-    crtc->vs = 4;
-    crtc->vbp = 6;
+    crtc->vact = 224;
+    crtc->vfp = 10;
+    crtc->vs = 6;
+    crtc->vbp = 10;
 
     tile_ctrl->hofs = -40;
     tile_ctrl->vofs = 0;
