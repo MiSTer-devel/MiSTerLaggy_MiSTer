@@ -24,21 +24,19 @@ reg [15:0] ctrl[16];
 wire [9:0] ce_num = ctrl[0][9:0];
 wire [9:0] ce_denom = ctrl[1][9:0];
 
-wire [11:0] h_start = ctrl[2][11:0];
-wire [11:0] h_end = ctrl[3][11:0];
-wire [11:0] hact_end = ctrl[4][11:0];
-wire [11:0] hsync_start = ctrl[5][11:0];
-wire [11:0] hsync_end = ctrl[6][11:0];
+wire [11:0] hact = ctrl[2][11:0];
+wire [11:0] hfp = ctrl[3][11:0];
+wire [11:0] hs = ctrl[4][11:0];
+wire [11:0] hbp = ctrl[5][11:0];
 
-wire [11:0] v_start = ctrl[7][11:0];
-wire [11:0] v_end = ctrl[8][11:0];
-wire [11:0] vact_end = ctrl[9][11:0];
-wire [11:0] vsync_start = ctrl[10][11:0];
-wire [11:0] vsync_end = ctrl[11][11:0];
+wire [11:0] vact = ctrl[6][11:0];
+wire [11:0] vfp = ctrl[7][11:0];
+wire [11:0] vs = ctrl[8][11:0];
+wire [11:0] vbp = ctrl[9][11:0];
 
 
-localparam HCNT_REG = 12;
-localparam VCNT_REG = 13;
+localparam HCNT_REG = 10;
+localparam VCNT_REG = 11;
 
 assign hcnt = ctrl[HCNT_REG][11:0];
 assign vcnt = ctrl[VCNT_REG][11:0];
@@ -53,10 +51,15 @@ jtframe_frac_cen ce_pix_frac(
     .cenb()
 );
 
-assign hblank = hcnt > hact_end || hcnt < h_start;
-assign hsync = hcnt > hsync_start && hcnt <= hsync_end;
-assign vblank = vcnt > vact_end || vcnt < v_start;
-assign vsync = vcnt > vsync_start && vcnt <= vsync_end;
+
+reg [11:0] hb_start, vb_start;
+reg [11:0] hs_start, vs_start;
+reg [11:0] hs_end, vs_end;
+
+assign hblank = hcnt >= hb_start || hcnt < hbp;
+assign hsync = hcnt >= hs_start && hcnt < hs_end;
+assign vblank = vcnt >= vb_start || vcnt < vbp;
+assign vsync = vcnt >= vs_start && vcnt < vs_end;
 assign dout = ctrl[address];
 
 always_ff @(posedge clk) begin
@@ -68,12 +71,19 @@ always_ff @(posedge clk) begin
     if (wr[0]) ctrl[address][7:0] <= din[7:0];
     if (wr[1]) ctrl[address][15:8] <= din[15:8];
 
+    hb_start <= hact + hbp;
+    vb_start <= vact + vbp;
+    hs_start <= hb_start + hfp;
+    vs_start <= vb_start + vfp;
+    hs_end <= hs_start + hs;
+    vs_end <= vs_start + vs;
+
     if (ce_pixel) begin
         ctrl[HCNT_REG] <= hcnt + 12'd1;
-        if (hcnt == h_end) begin
+        if (hcnt >= (hs_end - 1)) begin
             ctrl[HCNT_REG] <= 16'd0;
             ctrl[VCNT_REG] <= vcnt + 12'd1;
-            if (vcnt == v_end) begin
+            if (vcnt >= (vs_end - 1)) begin
                 ctrl[VCNT_REG] <= 16'd0;
             end
         end

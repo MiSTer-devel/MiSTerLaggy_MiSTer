@@ -11,16 +11,14 @@ typedef volatile struct
     uint16_t clk_numer;
     uint16_t clk_denom;
 
-    uint16_t h_start;
-    uint16_t h_end;
-    uint16_t hact_end;
-    uint16_t hsync_start;
-    uint16_t hsync_end;
-    uint16_t v_start;
-    uint16_t v_end;
-    uint16_t vact_end;
-    uint16_t vsync_start;
-    uint16_t vsync_end;
+    uint16_t hact;
+    uint16_t hfp;
+    uint16_t hs;
+    uint16_t hbp;
+    uint16_t vact;
+    uint16_t vfp;
+    uint16_t vs;
+    uint16_t vbp;
 
     uint16_t hcnt;
     uint16_t vcnt;
@@ -32,10 +30,18 @@ typedef volatile struct
     uint16_t latch;
 } Ticks;
 
+typedef struct
+{
+    uint16_t hofs;
+    uint16_t vofs;
+} TilemapCtrl;
+
 
 CRTC *crtc = (CRTC *)0x800000;
 uint16_t *vram = (uint16_t *)0x900000; // 128 * 128 = 16384 words
-uint16_t *palette_ram = (uint16_t *)0x910000;
+TilemapCtrl *tile_ctrl = (TilemapCtrl *)0x910000;
+
+uint16_t *palette_ram = (uint16_t *)0x920000;
 Ticks *ticks = (Ticks *)0x200000;
 volatile uint16_t *user_io = (volatile uint16_t *)0x300000;
 volatile uint16_t *gamepad = (volatile uint16_t *)0x400000;
@@ -132,19 +138,21 @@ int main(int argc, char *argv[])
     memcpyw(palette_ram, game_palette, 256);
 
     crtc->clk_numer = 1;
-    crtc->clk_denom = 3;
+    crtc->clk_denom = 4;
 
-    crtc->h_start = 16;
-    crtc->h_end = 637;
-    crtc->hact_end = 529;
-    crtc->hsync_start = 544;
-    crtc->hsync_end = 590;
+    crtc->hact = 320;
+    crtc->hfp = 8;
+    crtc->hs = 32;
+    crtc->hbp = 40;
 
-    crtc->v_start = 0;
-    crtc->v_end = 253;
-    crtc->vact_end = 239;
-    crtc->vsync_start = 243;
-    crtc->vsync_end = 247;
+    crtc->vact = 240;
+    crtc->vfp = 3;
+    crtc->vs = 4;
+    crtc->vbp = 6;
+
+    tile_ctrl->hofs = -40;
+    tile_ctrl->vofs = 0;
+
 
     *user_io = 0xffff;
 
@@ -177,8 +185,8 @@ int main(int argc, char *argv[])
             palette_ram[0x89] = 0x0000;
             if (sensor_ticks >= frame_ticks)
             {
-                recent_ms = (sensor_ticks - frame_ticks) / 20000;
-                recent_us = ((sensor_ticks - frame_ticks) / 20 ) % 1000;
+                recent_ms = (sensor_ticks - frame_ticks) / 24000;
+                recent_us = ((sensor_ticks - frame_ticks) / 24 ) % 1000;
             }
 
         }

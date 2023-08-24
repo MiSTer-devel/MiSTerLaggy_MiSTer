@@ -42,8 +42,10 @@ wire ticks_sel = cpu_addr[23:16] == 8'h20;
 wire user_sel = cpu_addr[23:16] == 8'h30;
 wire pad_sel = cpu_addr[23:16] == 8'h40;
 wire crtc_sel = cpu_addr[23:16] == 8'h80;
-wire tilemap_sel = cpu_addr[23:16] == 8'h90;
-wire pal_sel = cpu_addr[23:16] == 8'h91;
+wire tilemap_ram_sel = cpu_addr[23:16] == 8'h90;
+wire tilemap_reg_sel = cpu_addr[23:16] == 8'h91;
+wire tilemap_sel = tilemap_ram_sel | tilemap_reg_sel;
+wire pal_sel = cpu_addr[23:16] == 8'h92;
 wire a1 = cpu_addr[1];
 
 wire [15:0] cpu_din = ram_sel ? ram_dout :
@@ -255,6 +257,9 @@ tilemap tilemap(
     .ce_pixel(ce_pixel),
 
     .wr((tilemap_sel & ~cpu_rw) ? ~cpu_ds_n : 2'b00),
+
+	.cs_ram(tilemap_ram_sel),
+	.cs_reg(tilemap_reg_sel),
 
     .address(cpu_addr[16:1]),
     .din(cpu_dout),
