@@ -2,7 +2,7 @@ module crtc(
     input clk,
     input reset,
 
-    input ce_pixel,
+    output ce_pixel,
 
     input [1:0] wr,
 
@@ -21,23 +21,37 @@ module crtc(
 
 reg [15:0] ctrl[16];
 
-wire [11:0] h_start = ctrl[0][11:0];
-wire [11:0] h_end = ctrl[1][11:0];
-wire [11:0] hact_end = ctrl[2][11:0];
-wire [11:0] hsync_start = ctrl[3][11:0];
-wire [11:0] hsync_end = ctrl[4][11:0];
+wire [9:0] ce_num = ctrl[0][9:0];
+wire [9:0] ce_denom = ctrl[1][9:0];
 
-wire [11:0] v_start = ctrl[5][11:0];
-wire [11:0] v_end = ctrl[6][11:0];
-wire [11:0] vact_end = ctrl[7][11:0];
-wire [11:0] vsync_start = ctrl[8][11:0];
-wire [11:0] vsync_end = ctrl[9][11:0];
+wire [11:0] h_start = ctrl[2][11:0];
+wire [11:0] h_end = ctrl[3][11:0];
+wire [11:0] hact_end = ctrl[4][11:0];
+wire [11:0] hsync_start = ctrl[5][11:0];
+wire [11:0] hsync_end = ctrl[6][11:0];
 
-localparam HCNT_REG = 10;
-localparam VCNT_REG = 11;
+wire [11:0] v_start = ctrl[7][11:0];
+wire [11:0] v_end = ctrl[8][11:0];
+wire [11:0] vact_end = ctrl[9][11:0];
+wire [11:0] vsync_start = ctrl[10][11:0];
+wire [11:0] vsync_end = ctrl[11][11:0];
+
+
+localparam HCNT_REG = 12;
+localparam VCNT_REG = 13;
 
 assign hcnt = ctrl[HCNT_REG][11:0];
 assign vcnt = ctrl[VCNT_REG][11:0];
+
+wire ce_pixel2; // unused
+jtframe_frac_cen ce_pix_frac(
+    .clk(clk),
+    .cen_in(1),
+    .n(ce_num),
+    .m(ce_denom),
+    .cen({ce_pixel2, ce_pixel}),
+    .cenb()
+);
 
 assign hblank = hcnt > hact_end || hcnt < h_start;
 assign hsync = hcnt > hsync_start && hcnt <= hsync_end;

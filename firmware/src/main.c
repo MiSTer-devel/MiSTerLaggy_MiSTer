@@ -8,6 +8,9 @@
 
 typedef volatile struct
 {
+    uint16_t clk_numer;
+    uint16_t clk_denom;
+
     uint16_t h_start;
     uint16_t h_end;
     uint16_t hact_end;
@@ -127,6 +130,9 @@ int main(int argc, char *argv[])
 {
     char tmp[64];
     memcpyw(palette_ram, game_palette, 256);
+
+    crtc->clk_numer = 1;
+    crtc->clk_denom = 3;
 
     crtc->h_start = 16;
     crtc->h_end = 637;

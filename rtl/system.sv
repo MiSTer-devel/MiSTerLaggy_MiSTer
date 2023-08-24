@@ -1,13 +1,13 @@
 
 module system
 (
-	input         clk,
-	input         reset,
+	input   clk,
+	input   reset,
 	
-	input         pal,
-	input         scandouble,
+	input   pal,
+	input   scandouble,
 
-	output reg    ce_pix,
+	output  ce_pixel,
 
 	output  HBlank,
 	output  HSync,
@@ -225,7 +225,7 @@ crtc crtc(
     .clk(clk),
     .reset(reset),
 
-    .ce_pixel(ce_pix),
+    .ce_pixel(ce_pixel),
 
     .wr((crtc_sel & ~cpu_rw) ? ~cpu_ds_n : 2'b00),
 
@@ -252,7 +252,7 @@ tilemap tilemap(
     .clk(clk),
     .reset(reset),
 
-    .ce_pixel(ce_pix),
+    .ce_pixel(ce_pixel),
 
     .wr((tilemap_sel & ~cpu_rw) ? ~cpu_ds_n : 2'b00),
 
@@ -265,9 +265,5 @@ tilemap tilemap(
 
     .color_out(color_idx)
 );
-
-always_ff @(posedge clk) begin
-	ce_pix <= ~ce_pix;
-end
 
 endmodule

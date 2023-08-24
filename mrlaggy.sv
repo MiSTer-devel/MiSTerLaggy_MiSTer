@@ -260,7 +260,6 @@ wire HBlank;
 wire HSync;
 wire VBlank;
 wire VSync;
-wire ce_pix;
 
 system system
 (
@@ -270,7 +269,7 @@ system system
 	.pal(status[2]),
 	.scandouble(forced_scandoubler),
 
-	.ce_pix(ce_pix),
+	.ce_pixel(CE_PIXEL),
 
 	.HBlank(HBlank),
 	.HSync(HSync),
@@ -287,7 +286,6 @@ system system
 );
 
 assign CLK_VIDEO = clk_sys;
-assign CE_PIXEL = ce_pix;
 
 assign VGA_DE = ~(HBlank | VBlank);
 assign VGA_HS = HSync;
