@@ -161,20 +161,12 @@ fx68k m68000(
 	.eab(cpu_word_addr)
 );
 
-singleport_ram #(.widthad(15), .width(8), .name("ROM0"), .init_file("roms/cpu_low.hex")) cpu_rom_0(
+singleport_ram #(.widthad(15), .width(16), .name("ROM0"), .init_file("roms/cpu.mif")) cpu_rom(
     .clock(clk),
     .wren(0),
     .address(cpu_addr[15:1]),
     .data(),
-    .q(rom_dout[7:0])
-);
-
-singleport_ram #(.widthad(15), .width(8), .name("ROM1"), .init_file("roms/cpu_high.hex")) cpu_rom_1(
-    .clock(clk),
-    .wren(0),
-    .address(cpu_addr[15:1]),
-    .data(),
-    .q(rom_dout[15:8])
+    .q(rom_dout[15:0])
 );
 
 singleport_ram #(.widthad(15), .width(8), .name("RAM0")) cpu_ram_0(

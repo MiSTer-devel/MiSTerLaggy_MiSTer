@@ -20,10 +20,13 @@ CFLAGS = -march=68000 -ffreestanding $(DEFINES) -O2
 LIBS = -lgcc
 LDFLAGS = -march=68000 -static -nostdlib
 
-all: $(BUILD_DIR)/cpu_low.hex $(BUILD_DIR)/cpu_high.hex
+all: $(BUILD_DIR)/cpu.mif
 
-$(BUILD_DIR)/cpu_high.hex: $(BUILD_DIR)/cpu.elf
-	$(OBJCOPY) -S -i 2 -b 0 -O ihex $< $@
+$(BUILD_DIR)/cpu.bin: $(BUILD_DIR)/cpu.elf
+	$(OBJCOPY) -S -O binary $< $@
+
+$(BUILD_DIR)/cpu.mif: $(BUILD_DIR)/cpu.bin
+	python3 genmif.py $< $@ 16 32768 big
 
 $(BUILD_DIR)/cpu_low.hex: $(BUILD_DIR)/cpu.elf
 	$(OBJCOPY) -S -i 2 -b 1 -O ihex $< $@
