@@ -20,7 +20,13 @@ module system
 
 	input [15:0] gamepad,
 	input [6:0] user_in,
-	output reg [6:0] user_out
+	output reg [6:0] user_out,
+
+    input ioctl_download,
+    input [15:0] ioctl_index,
+    input        ioctl_wr,
+    input [26:0] ioctl_addr,
+    input [15:0] ioctl_dout
 );
 
 reg phi1, phi2;
@@ -163,9 +169,9 @@ fx68k m68000(
 
 singleport_ram #(.widthad(15), .width(16), .name("ROM0"), .init_file("roms/cpu.mif")) cpu_rom(
     .clock(clk),
-    .wren(0),
-    .address(cpu_addr[15:1]),
-    .data(),
+    .wren(ioctl_download & ioctl_wr),
+    .address(ioctl_download ? ioctl_addr[15:1] : cpu_addr[15:1]),
+    .data({ioctl_dout[7:0], ioctl_dout[15:8]}),
     .q(rom_dout[15:0])
 );
 

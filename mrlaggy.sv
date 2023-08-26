@@ -208,7 +208,7 @@ localparam CONF_STR = {
 	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"O[2],TV Mode,NTSC,PAL;",
 	"-;",
-	"F1,BIN;",
+	"FC0,BIN,Load CPU ROM;",
 	"-;",
 	"T[0],Reset;",
 	"R[0],Reset and close OSD;",
@@ -224,7 +224,11 @@ wire [127:0] status;
 wire  [10:0] ps2_key;
 wire  [31:0] gamepad;
 
-hps_io #(.CONF_STR(CONF_STR)) hps_io
+wire ioctl_download, ioctl_wr;
+wire [15:0] ioctl_index, ioctl_dout;
+wire [26:0] ioctl_addr;
+
+hps_io #(.CONF_STR(CONF_STR), .WIDE(1)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
@@ -239,7 +243,14 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 
 	.joystick_0(gamepad),
 	
-	.ps2_key(ps2_key)
+	.ps2_key(ps2_key),
+
+	.ioctl_download(ioctl_download),
+	.ioctl_wr(ioctl_wr),
+	.ioctl_index(ioctl_index),
+	.ioctl_addr(ioctl_addr),
+	.ioctl_dout(ioctl_dout),
+	.ioctl_wait(0)
 );
 
 ///////////////////////   CLOCKS   ///////////////////////////////
@@ -252,7 +263,7 @@ pll pll
 	.outclk_0(clk_sys)
 );
 
-wire reset = RESET | status[0] | buttons[1];
+wire reset = RESET | status[0] | buttons[1] | ioctl_download;
 
 wire [1:0] col = status[4:3];
 
@@ -282,7 +293,13 @@ system system
 
 	.gamepad(gamepad[15:0]),
 	.user_out(USER_OUT),
-	.user_in(USER_IN)
+	.user_in(USER_IN),
+
+	.ioctl_download(ioctl_download),
+	.ioctl_wr(ioctl_wr),
+	.ioctl_index(ioctl_index),
+	.ioctl_addr(ioctl_addr),
+	.ioctl_dout(ioctl_dout)
 );
 
 assign CLK_VIDEO = clk_sys;
