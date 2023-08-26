@@ -122,9 +122,42 @@ void draw_text(int color, uint16_t x, uint16_t y, const char *str)
     }
 }
 
+#define STATUS_W 16
+#define STATUS_H 4
+typedef struct
+{
+    uint16_t x;
+    uint16_t y;
+
+    char lines[STATUS_H][STATUS_W+1];
+    uint8_t colors[STATUS_H];
+} StatusInfo;
+
+StatusInfo status;
+
+static void draw_status()
+{
+    uint16_t ofs = ( status.y * 128 ) + status.x;
+    for( int i = 0; i < STATUS_H; i++ )
+    {
+        uint16_t x = 0;
+        const char *s = status.lines[i];
+        uint16_t color = status.colors[i] << 12;
+        memsetw(&vram[ofs], 0, STATUS_W);
+
+        while(*s && x < STATUS_W)
+        {
+            vram[ofs + x] = color | *s;
+            s++;
+            x++;
+        }
+
+        ofs += 128;
+    }
+
+}
 
 uint32_t vblank_count = 0;
-
 void wait_vblank()
 {
     while (vblank_count == int2_count) {};
@@ -132,11 +165,9 @@ void wait_vblank()
     vblank_count = int2_count;
 }
 
-int main(int argc, char *argv[])
-{
-    char tmp[64];
-    memcpyw(palette_ram, game_palette, 256);
 
+static void config_ntsc_224p()
+{
     crtc->clk_numer = 1;
     crtc->clk_denom = 4;
 
@@ -151,18 +182,28 @@ int main(int argc, char *argv[])
     crtc->vbp = 10;
 
     tile_ctrl->hofs = -40;
-    tile_ctrl->vofs = 0;
+    tile_ctrl->vofs = -10;
 
+    // Sample rectangles
+    draw_rect(8, 0, 1, 11, 6);
+    draw_rect(8, 0, 11, 11, 6);
+    draw_rect(8, 0, 21, 11, 6);
+
+    status.x = 14;
+    status.y = 10;
+}
+
+int main(int argc, char *argv[])
+{
+    char tmp[64];
+    memsetw(vram, 0, 128 * 128);
+    memcpyw(palette_ram, game_palette, 256);
+    palette_ram[0x89] = 0x0000;
 
     *user_io = 0xffff;
 
-    memsetw(&palette_ram[0x80], 0xffff, 16);
-
-    palette_ram[0x89] = 0x0000;
-
-    draw_rect(8, 4, 2, 6, 6);
-    draw_rect(8, 4, 10, 6, 6);
-    draw_rect(8, 4, 18, 6, 6);
+    memset(&status, 0, sizeof(status));
+    config_ntsc_224p();
 
     enable_interrupts();
 
@@ -188,20 +229,18 @@ int main(int argc, char *argv[])
                 recent_ms = (sensor_ticks - frame_ticks) / 24000;
                 recent_us = ((sensor_ticks - frame_ticks) / 24 ) % 1000;
             }
-
         }
+        draw_status();
 
-        snprintf(tmp, 64, "TICKS: %010u", read_ticks());
-        draw_text(0, 18, 10, tmp);
+        status.colors[0] = 0;
+        status.colors[1] = 0;
+        status.colors[2] = 0;
+        status.colors[3] = 0;
 
-        snprintf(tmp, 64, "INT2:  %010u", int2_count);
-        draw_text(0, 18, 12, tmp);
-
-        snprintf(tmp, 64, "USER_IO:  %02X", *user_io);
-        draw_text(0, 18, 14, tmp);
-
-        snprintf(tmp, 64, "SENSOR:  %u.%u ms          ", recent_ms, recent_us);
-        draw_text(0, 18, 16, tmp);
+        snprintf(status.lines[0], STATUS_W, "TICKS: %u", read_ticks());
+        snprintf(status.lines[1], STATUS_W, "INT2: %u", int2_count);
+        snprintf(status.lines[2], STATUS_W, "USER_IO: %02X", *user_io);
+        snprintf(status.lines[3], STATUS_W, "SENSOR: %u.%u ms", recent_ms, recent_us);
     }
 
     return 0;
