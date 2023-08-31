@@ -6,6 +6,14 @@
 #include "interrupts.h"
 #include "palette.h"
 
+#define CLK_MHZ 24
+#define CLK_KHZ (CLK_MHZ * 1000)
+#define MS_TO_TICKS(ms) ((ms) * CLK_KHZ)
+
+#define WAIT_CLEAR_TICKS MS_TO_TICKS(100)
+#define MIN_SAMPLE_TICKS MS_TO_TICKS(100)
+#define MAX_SAMPLE_TICKS MS_TO_TICKS(300)
+
 typedef volatile struct
 {
     uint16_t clk_numer;
@@ -122,7 +130,7 @@ void draw_text(int color, uint16_t x, uint16_t y, const char *str)
     }
 }
 
-#define STATUS_W 16
+#define STATUS_W 24
 #define STATUS_H 4
 typedef struct
 {
@@ -193,6 +201,94 @@ static void config_ntsc_224p()
     status.y = 10;
 }
 
+
+typedef enum
+{
+    ST_CLEAR = 0,
+    ST_WAIT_CLEAR,
+    ST_START_SAMPLE,
+    ST_WAIT_SAMPLE,
+    ST_END_SAMPLE,
+} State;
+
+State state = ST_CLEAR;
+uint32_t state_start_ticks;
+
+static void set_state(State s)
+{
+    state = s;
+    state_start_ticks = read_ticks();
+}
+
+int ticks_to_ms_str(uint32_t ticks, char *str, int len)
+{
+    uint32_t ms = ticks / CLK_KHZ;
+    uint32_t us = (ticks / CLK_MHZ ) % 1000;
+    return snprintf(str, len, "%u.%u", ms, us);
+}
+
+#define HISTORY_SIZE 32
+uint32_t samples[HISTORY_SIZE];
+uint32_t latest_sample;
+uint32_t sample_idx = 0;
+typedef enum
+{
+    NO_SAMPLE,
+    NEW_SAMPLE,
+    MISSING_SAMPLE
+} SampleStatus;
+
+SampleStatus sample_status;
+
+void record_new_sample(uint32_t ticks)
+{
+    latest_sample = ticks;
+    samples[sample_idx % HISTORY_SIZE] = ticks;
+    sample_idx++;
+    sample_status = NEW_SAMPLE;
+}
+
+void record_missing_sample()
+{
+    sample_status = MISSING_SAMPLE;
+}
+
+void update_sample_status()
+{
+    uint32_t min_ticks = 0xffffffff;
+    uint32_t max_ticks = 0x00000000;
+    uint32_t total_ticks = 0;
+
+    int history_len = HISTORY_SIZE > sample_idx ? sample_idx : HISTORY_SIZE;
+
+    for( int i = 0; i < history_len; i++ )
+    {
+        uint32_t ticks = samples[i];
+        total_ticks += ticks;
+
+        if (ticks > max_ticks) max_ticks = ticks;
+        if (ticks < min_ticks) min_ticks = ticks;
+    }
+
+    uint32_t mean_ticks = total_ticks / history_len;
+
+    status.colors[0] = 0;
+    status.colors[1] = 0;
+    status.colors[2] = 0;
+    status.colors[3] = 0;
+
+    char ms_str1[16], ms_str2[16];
+    ticks_to_ms_str(latest_sample, ms_str1, 16);
+    ticks_to_ms_str(mean_ticks, ms_str2, 16);
+    snprintf(status.lines[0], STATUS_W, "Cur: %s ms", ms_str1);
+    snprintf(status.lines[1], STATUS_W, "Avg: %s ms", ms_str2);
+
+    ticks_to_ms_str(min_ticks, ms_str1, 16);
+    ticks_to_ms_str(max_ticks, ms_str2, 16);
+    snprintf(status.lines[2], STATUS_W, "Min: %s ms", ms_str1);
+    snprintf(status.lines[3], STATUS_W, "Max: %s ms", ms_str2);
+}
+
 int main(int argc, char *argv[])
 {
     char tmp[64];
@@ -200,47 +296,82 @@ int main(int argc, char *argv[])
     memcpyw(palette_ram, game_palette, 256);
     palette_ram[0x89] = 0x0000;
 
-    *user_io = 0xffff;
+    *user_io = 0x0001;
 
     memset(&status, 0, sizeof(status));
     config_ntsc_224p();
 
     enable_interrupts();
 
-    uint32_t recent_us = 0, recent_ms = 0;
-
     while (true)
     {
         wait_vblank();
+        uint32_t cur_ticks = read_ticks();
+        uint32_t state_ticks = cur_ticks - state_start_ticks;
 
-        if (vblank_count & 0x20)
+        switch (state)
         {
-            palette_ram[0x89] = 0xffff;
-            if ((vblank_count & 0x1f) == 0)
-            {
+            case ST_CLEAR:
+                palette_ram[0x89] = 0x0000;
+                set_state(ST_WAIT_CLEAR);
+                break;
+
+            case ST_WAIT_CLEAR:
+                if (state_ticks >= WAIT_CLEAR_TICKS)
+                {
+                    set_state(ST_START_SAMPLE);
+                }
+                break;
+
+            case ST_START_SAMPLE:
+                set_state(ST_WAIT_SAMPLE);
+                palette_ram[0x89] = 0xffff;
                 sample_seq++;
-            }
+                break;
+
+            case ST_WAIT_SAMPLE:
+                if (state_ticks < MIN_SAMPLE_TICKS)
+                {
+                    break;
+                }
+
+                if (state_ticks > MAX_SAMPLE_TICKS)
+                {
+                    set_state(ST_CLEAR);
+                    record_missing_sample();
+                }
+                else if (sample_seq == frame_seq && sample_seq == sensor_seq)
+                {
+                    set_state(ST_CLEAR);
+                    uint32_t tick_diff = sensor_ticks - frame_ticks;
+                    record_new_sample(tick_diff);
+                }
+                break;
+
+            default:
+                set_state(ST_CLEAR);
+                break;
         }
-        else
-        {
-            palette_ram[0x89] = 0x0000;
-            if (sensor_ticks >= frame_ticks)
-            {
-                recent_ms = (sensor_ticks - frame_ticks) / 24000;
-                recent_us = ((sensor_ticks - frame_ticks) / 24 ) % 1000;
-            }
-        }
+
         draw_status();
 
-        status.colors[0] = 0;
-        status.colors[1] = 0;
-        status.colors[2] = 0;
-        status.colors[3] = 0;
+        switch (sample_status)
+        {
+            case MISSING_SAMPLE:
+                status.colors[0] = 1;
+                snprintf(status.lines[0], STATUS_W, "CUR: NO SAMPLE");
+                break;
 
-        snprintf(status.lines[0], STATUS_W, "TICKS: %u", read_ticks());
-        snprintf(status.lines[1], STATUS_W, "INT2: %u", int2_count);
-        snprintf(status.lines[2], STATUS_W, "USER_IO: %02X", *user_io);
-        snprintf(status.lines[3], STATUS_W, "SENSOR: %u.%u ms", recent_ms, recent_us);
+            case NEW_SAMPLE:
+                update_sample_status();
+                break;
+
+            case NO_SAMPLE:
+            default:
+                break;
+        }
+
+        sample_status = NO_SAMPLE;
     }
 
     return 0;
