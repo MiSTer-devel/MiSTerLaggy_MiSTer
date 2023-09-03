@@ -192,7 +192,7 @@
       (net 1 "GND") (pinfunction "SHIELD") (pintype "passive") (tstamp a25086db-f876-4feb-b091-d10f69349cee))
     (pad "S1" thru_hole oval (at 4.32 1.075 180) (size 1 1.8) (drill oval 0.6 1.4) (layers "*.Cu" "*.Mask")
       (net 1 "GND") (pinfunction "SHIELD") (pintype "passive") (tstamp 02f8cc72-50b5-44ab-97b4-34486a522b70))
-    (model "${KICAD6_3DMODEL_DIR}/Connector_USB.3dshapes/USB_C_Receptacle_G-Switch_GT-USB-7010ASV.wrl"
+    (model "${KICAD6_3DMODEL_DIR}/Connector_USB.3dshapes/USB_C_Receptacle_G-Switch_GT-USB-7010ASV.wrl" hide
       (offset (xyz 0 0 0))
       (scale (xyz 1 1 1))
       (rotate (xyz 0 0 0))
