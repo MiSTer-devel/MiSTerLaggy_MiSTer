@@ -26,7 +26,9 @@ module system
     input [15:0] ioctl_index,
     input        ioctl_wr,
     input [26:0] ioctl_addr,
-    input [15:0] ioctl_dout
+    input [15:0] ioctl_dout,
+
+	inout [35:0] EXT_BUS
 );
 
 reg phi1, phi2;
@@ -43,10 +45,13 @@ wire cpu_write = ~cpu_rw & &cpu_ds_n;
 wire [1:0] cpu_ds_n;
 wire cpu_as_n;
 wire [2:0] cpu_fc;
+
 wire ram_sel = cpu_addr[23:16] == 8'h10;
 wire ticks_sel = cpu_addr[23:16] == 8'h20;
 wire user_sel = cpu_addr[23:16] == 8'h30;
 wire pad_sel = cpu_addr[23:16] == 8'h40;
+wire hps_sel = cpu_addr[23:16] == 8'h50;
+wire hps_valid_sel = cpu_addr[23:16] == 8'h51;
 wire crtc_sel = cpu_addr[23:16] == 8'h80;
 wire tilemap_ram_sel = cpu_addr[23:16] == 8'h90;
 wire tilemap_reg_sel = cpu_addr[23:16] == 8'h91;
@@ -72,6 +77,8 @@ wire [15:0] ram_dout;
 wire [15:0] tilemap_dout;
 wire [15:0] crtc_dout;
 wire [15:0] pal_dout;
+
+reg hps_valid = 0;
 
 reg [1:0] irq_level;
 reg [2:0] irq_flagged;
@@ -101,14 +108,20 @@ always_ff @(posedge clk) begin
 end
 
 always_ff @(posedge clk) begin
-	if (ticks_sel & ~cpu_rw) ticks_latch <= ticks;
-	ticks <= ticks + 32'd1;
+	if (reset) begin
+		ticks <= 32'd0;
+		hps_valid <= 0;
+	end else begin
+		if (ticks_sel & ~cpu_rw) ticks_latch <= ticks;
+		ticks <= ticks + 32'd1;
 
-	if (user_sel & ~cpu_rw & ~cpu_ds_n[0]) user_out <= cpu_dout[6:0];
+		if (user_sel & ~cpu_rw & ~cpu_ds_n[0]) user_out <= cpu_dout[6:0];
+		if (hps_valid_sel & ~cpu_rw & ~cpu_ds_n[0]) hps_valid <= cpu_dout[0];
+	end
 end
 
 reg [2:0] intp_prev;
-wire [2:0] intp = { user_in[0], ~VBlank, VBlank };
+wire [2:0] intp = { user_in[1], ~VBlank, VBlank };
 
 always_ff @(posedge clk) begin
 	if (reset) begin
@@ -267,6 +280,15 @@ tilemap tilemap(
     .vcnt(vcnt),
 
     .color_out(color_idx)
+);
+
+hps_ext hps_ext(
+	.clk_sys(clk),
+	.EXT_BUS(EXT_BUS),
+	.valid(hps_valid),
+	.wr((hps_sel & ~cpu_rw) ? ~cpu_ds_n : 2'b00),
+	.din(cpu_dout),
+	.addr(cpu_addr[7:1])
 );
 
 endmodule

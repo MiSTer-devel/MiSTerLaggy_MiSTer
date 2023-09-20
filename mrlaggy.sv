@@ -211,7 +211,8 @@ localparam CONF_STR = {
 	"FC0,BIN,Load CPU ROM;",
 	"-;",
 	"T[0],Reset;",
-	"R[0],Reset and close OSD;",
+	"J1,Ok,Back,Menu;",
+	"Jn,A,B,Start;",
 	"v,0;", // [optional] config version 0-99. 
 	        // If CONF_STR options are changed in incompatible way, then change version number too,
 			  // so all options will get default values on first start.
@@ -227,12 +228,13 @@ wire  [31:0] gamepad;
 wire ioctl_download, ioctl_wr;
 wire [15:0] ioctl_index, ioctl_dout;
 wire [26:0] ioctl_addr;
+wire [35:0] EXT_BUS;
 
 hps_io #(.CONF_STR(CONF_STR), .WIDE(1)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
-	.EXT_BUS(),
+	.EXT_BUS(EXT_BUS),
 	.gamma_bus(),
 
 	.forced_scandoubler(forced_scandoubler),
@@ -299,7 +301,9 @@ system system
 	.ioctl_wr(ioctl_wr),
 	.ioctl_index(ioctl_index),
 	.ioctl_addr(ioctl_addr),
-	.ioctl_dout(ioctl_dout)
+	.ioctl_dout(ioctl_dout),
+
+	.EXT_BUS(EXT_BUS)
 );
 
 assign CLK_VIDEO = clk_sys;

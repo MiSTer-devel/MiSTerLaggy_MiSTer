@@ -2,6 +2,7 @@ set_global_assignment -name SDC_FILE mrlaggy.sdc
 set_global_assignment -name SYSTEMVERILOG_FILE mrlaggy.sv
 
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/system.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/hps_ext.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/dpramv.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/crtc.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/tilemap.sv

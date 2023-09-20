@@ -5,10 +5,13 @@
 #include "util.h"
 #include "interrupts.h"
 #include "palette.h"
+#include "input.h"
 
 #define CLK_MHZ 24
 #define CLK_KHZ (CLK_MHZ * 1000)
 #define MS_TO_TICKS(ms) ((ms) * CLK_KHZ)
+
+#define RGB(r, g, b) ( ( ((r) & 0xf8) << 7 ) | ( ((g) & 0xf8) << 2 ) | ( ((b) & 0xf8) >> 3 ) );
 
 #define WAIT_CLEAR_TICKS MS_TO_TICKS(100)
 #define MIN_SAMPLE_TICKS MS_TO_TICKS(100)
@@ -52,7 +55,8 @@ TilemapCtrl *tile_ctrl = (TilemapCtrl *)0x910000;
 uint16_t *palette_ram = (uint16_t *)0x920000;
 Ticks *ticks = (Ticks *)0x200000;
 volatile uint16_t *user_io = (volatile uint16_t *)0x300000;
-volatile uint16_t *gamepad = (volatile uint16_t *)0x400000;
+volatile uint16_t *hps = (volatile uint16_t *)0x500000;
+volatile uint16_t *hps_valid = (volatile uint16_t *)0x510000;
 
 volatile uint32_t int2_count = 0;
 
@@ -62,6 +66,32 @@ volatile uint16_t sensor_seq = 0;
 
 volatile uint32_t frame_ticks = 0;
 volatile uint32_t sensor_ticks = 0;
+
+typedef struct
+{
+    uint16_t size;
+
+    int16_t vsync_adjust;
+    char modeline[64];
+} HPSConfig;
+
+HPSConfig hps_config;
+
+void commit_hps_config()
+{
+    *hps_valid = 0;
+    memcpy((void *)hps, &hps_config, sizeof(hps_config));
+    *hps_valid = 0xffff;
+}
+
+void init_hps_config()
+{
+    hps_config.size = sizeof(hps_config);
+    hps_config.vsync_adjust = -1;
+    hps_config.modeline[0] = '\0';
+
+    commit_hps_config();
+}
 
 uint32_t read_ticks()
 {
@@ -100,7 +130,7 @@ __attribute__((interrupt)) void level6_handler()
 void draw_rect(int color, uint16_t x, uint16_t y, uint16_t w, uint16_t h)
 {
     int ofs = ( y * 128 ) + x;
-    uint16_t tile = (color << 12) | 0x01;
+    uint16_t tile = ( ( color & 0xf0 ) << 8 ) | ( 0x10 + ( color & 0x0f ) );
 
     for( int i = 0; i < h; i++ )
     {
@@ -193,9 +223,14 @@ static void config_ntsc_224p()
     tile_ctrl->vofs = -10;
 
     // Sample rectangles
-    draw_rect(8, 0, 1, 11, 6);
-    draw_rect(8, 0, 11, 11, 6);
-    draw_rect(8, 0, 21, 11, 6);
+    draw_rect(0x8f, 0, 1, 11, 6);
+    draw_rect(0x8f, 0, 11, 11, 6);
+    draw_rect(0x8f, 0, 21, 11, 6);
+
+    for( int i = 0; i < 16; i++ )
+    {
+        draw_rect(0x90 + i, 16+i, 21, 1, 10);
+    }
 
     status.x = 14;
     status.y = 10;
@@ -292,11 +327,20 @@ void update_sample_status()
 int main(int argc, char *argv[])
 {
     char tmp[64];
+
+    init_hps_config();
+
     memsetw(vram, 0, 128 * 128);
     memcpyw(palette_ram, game_palette, 256);
-    palette_ram[0x89] = 0x0000;
+    palette_ram[0x8f] = 0x0000;
 
-    *user_io = 0x0001;
+    for( int i = 0; i < 16; i++ )
+    {
+        palette_ram[0x90 + i] = RGB( i * 16, i * 16, i * 16 );
+    }
+
+    *user_io = 0xffff;
+
 
     memset(&status, 0, sizeof(status));
     config_ntsc_224p();
@@ -306,13 +350,15 @@ int main(int argc, char *argv[])
     while (true)
     {
         wait_vblank();
+        input_poll();
+
         uint32_t cur_ticks = read_ticks();
         uint32_t state_ticks = cur_ticks - state_start_ticks;
 
         switch (state)
         {
             case ST_CLEAR:
-                palette_ram[0x89] = 0x0000;
+                palette_ram[0x8f] = 0x0000;
                 set_state(ST_WAIT_CLEAR);
                 break;
 
@@ -325,7 +371,7 @@ int main(int argc, char *argv[])
 
             case ST_START_SAMPLE:
                 set_state(ST_WAIT_SAMPLE);
-                palette_ram[0x89] = 0xffff;
+                palette_ram[0x8f] = 0xffff;
                 sample_seq++;
                 break;
 
@@ -370,6 +416,8 @@ int main(int argc, char *argv[])
             default:
                 break;
         }
+
+        //snprintf(status.lines[3], STATUS_W, "USER: %02X", *user_io);
 
         sample_status = NO_SAMPLE;
     }
