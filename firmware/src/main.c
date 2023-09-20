@@ -14,8 +14,8 @@
 #define RGB(r, g, b) ( ( ((r) & 0xf8) << 7 ) | ( ((g) & 0xf8) << 2 ) | ( ((b) & 0xf8) >> 3 ) );
 
 #define WAIT_CLEAR_TICKS MS_TO_TICKS(100)
-#define MIN_SAMPLE_TICKS MS_TO_TICKS(100)
-#define MAX_SAMPLE_TICKS MS_TO_TICKS(300)
+#define MIN_SAMPLE_TICKS MS_TO_TICKS(200)
+#define MAX_SAMPLE_TICKS MS_TO_TICKS(500)
 
 typedef volatile struct
 {
