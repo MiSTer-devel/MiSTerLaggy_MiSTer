@@ -6,6 +6,8 @@
 #include "interrupts.h"
 #include "palette.h"
 #include "input.h"
+#include "hdmi.h"
+#include "gfx.h"
 
 #define CLK_MHZ 24
 #define CLK_KHZ (CLK_MHZ * 1000)
@@ -19,44 +21,13 @@
 
 typedef volatile struct
 {
-    uint16_t clk_numer;
-    uint16_t clk_denom;
-
-    uint16_t hact;
-    uint16_t hfp;
-    uint16_t hs;
-    uint16_t hbp;
-    uint16_t vact;
-    uint16_t vfp;
-    uint16_t vs;
-    uint16_t vbp;
-
-    uint16_t hcnt;
-    uint16_t vcnt;
-} CRTC;
-
-typedef volatile struct
-{
     uint32_t value;
     uint16_t latch;
 } Ticks;
 
-typedef struct
-{
-    uint16_t hofs;
-    uint16_t vofs;
-} TilemapCtrl;
-
-
-CRTC *crtc = (CRTC *)0x800000;
-uint16_t *vram = (uint16_t *)0x900000; // 128 * 128 = 16384 words
-TilemapCtrl *tile_ctrl = (TilemapCtrl *)0x910000;
-
 uint16_t *palette_ram = (uint16_t *)0x920000;
 Ticks *ticks = (Ticks *)0x200000;
 volatile uint16_t *user_io = (volatile uint16_t *)0x300000;
-volatile uint16_t *hps = (volatile uint16_t *)0x500000;
-volatile uint16_t *hps_valid = (volatile uint16_t *)0x510000;
 
 volatile uint32_t int2_count = 0;
 
@@ -67,31 +38,6 @@ volatile uint16_t sensor_seq = 0;
 volatile uint32_t frame_ticks = 0;
 volatile uint32_t sensor_ticks = 0;
 
-typedef struct
-{
-    uint16_t size;
-
-    int16_t vsync_adjust;
-    char modeline[64];
-} HPSConfig;
-
-HPSConfig hps_config;
-
-void commit_hps_config()
-{
-    *hps_valid = 0;
-    memcpy((void *)hps, &hps_config, sizeof(hps_config));
-    *hps_valid = 0xffff;
-}
-
-void init_hps_config()
-{
-    hps_config.size = sizeof(hps_config);
-    hps_config.vsync_adjust = -1;
-    hps_config.modeline[0] = '\0';
-
-    commit_hps_config();
-}
 
 uint32_t read_ticks()
 {
@@ -127,39 +73,6 @@ __attribute__((interrupt)) void level6_handler()
 }
 
 
-void draw_rect(int color, uint16_t x, uint16_t y, uint16_t w, uint16_t h)
-{
-    int ofs = ( y * 128 ) + x;
-    uint16_t tile = ( ( color & 0xf0 ) << 8 ) | ( 0x10 + ( color & 0x0f ) );
-
-    for( int i = 0; i < h; i++ )
-    {
-        memsetw(&vram[ofs], tile, w);
-        ofs += 128;
-    }
-}
-
-
-void draw_text(int color, uint16_t x, uint16_t y, const char *str)
-{
-    int ofs = ( y * 128 ) + x;
-
-    while(*str)
-    {
-        if( *str == '\n' )
-        {
-            y++;
-            ofs = (y * 128) + x;
-        }
-        else
-        {
-            vram[ofs] = (color << 12) | *str;
-            ofs++;
-        }
-        str++;
-    }
-}
-
 #define STATUS_W 24
 #define STATUS_H 4
 typedef struct
@@ -175,24 +88,106 @@ StatusInfo status;
 
 static void draw_status()
 {
-    uint16_t ofs = ( status.y * 128 ) + status.x;
+    gfx_begin_region(status.x, status.y, STATUS_W, STATUS_H);
+    gfx_pen256(0);
+    gfx_rect(0, 0, STATUS_W, STATUS_H);
+
     for( int i = 0; i < STATUS_H; i++ )
     {
-        uint16_t x = 0;
-        const char *s = status.lines[i];
-        uint16_t color = status.colors[i] << 12;
-        memsetw(&vram[ofs], 0, STATUS_W);
+        gfx_pen16(status.colors[i]);
+        gfx_text(status.lines[i]);
+    }
+    gfx_end_region();
+}
 
-        while(*s && x < STATUS_W)
-        {
-            vram[ofs + x] = color | *s;
-            s++;
-            x++;
-        }
+#define NUM_HDMI_MODES 15
 
-        ofs += 128;
+HDMIMode hdmi_modes[NUM_HDMI_MODES] =
+{
+    {    0,   0,   0,   0,    0,  0,  0,  0,   0    }, //0  Default
+    { 1280, 110,  40, 220,  720,  5,  5, 20,  74.25 }, //1  1280x720@60
+	{ 1024,  24, 136, 160,  768,  3,  6, 29,  65,   }, //2  1024x768@60
+	{  720,  16,  62,  60,  480,  9,  6, 30,  27    }, //3  720x480@60
+	{  720,  12,  64,  68,  576,  5,  5, 39,  27    }, //4  720x576@50
+	{ 1280,  48, 112, 248, 1024,  1,  3, 38, 108    }, //5  1280x1024@60
+	{  800,  40, 128,  88,  600,  1,  4, 23,  40    }, //6  800x600@60
+	{  640,  16,  96,  48,  480, 10,  2, 33,  25.175 }, //7  640x480@60
+	{ 1280, 440,  40, 220,  720,  5,  5, 20,  74.25  }, //8  1280x720@50
+	{ 1920,  88,  44, 148, 1080,  4,  5, 36, 148.5   }, //9  1920x1080@60
+	{ 1920, 528,  44, 148, 1080,  4,  5, 36, 148.5   }, //10  1920x1080@50
+	{ 1366,  70, 143, 213,  768,  3,  3, 24,  85.5   }, //11 1366x768@60
+	{ 1024,  40, 104, 144,  600,  1,  3, 18,  48.96  }, //12 1024x600@60
+	{ 1920,  48,  32,  80, 1440,  2,  4, 38, 185.203 }, //13 1920x1440@60
+	{ 2048,  48,  32,  80, 1536,  2,  4, 38, 209.318 }, //14 2048x1536@60
+};
+
+const char *hdmi_mode_names[NUM_HDMI_MODES] =
+{
+    "Default",
+    "1280x720 60Hz",
+    "1024x768 60Hz",
+    "720x480 60Hz",
+    "720x576 50Hz",
+    "1280x1024 60Hz",
+    "800x600 60Hz",
+    "640x480 60Hz",
+    "1280x720 50Hz",
+    "1920x1080 60Hz",
+    "1920x1080 50Hz",
+    "1366x768 60Hz",
+    "1024x600 60Hz",
+    "1920x1440 60Hz",
+    "2048x1536 60Hz"
+};
+
+const char *vsync_modes[3] = { "Match Output", "Match Input", "Low Latency" };
+static bool draw_menu(bool reset)
+{
+    static int mode_idx = 0;
+    static int vsync_adjust = 0;
+
+    static int applied_mode_idx = 0;
+    static int applied_vsync_adjust = 0;
+
+    static MenuContext menuctx = INIT_MENU_CONTEXT;
+
+    if (reset)
+    {
+        mode_idx = applied_mode_idx;
+        vsync_adjust = applied_vsync_adjust;
     }
 
+    gfx_clear();
+
+    gfx_begin_menu("VIDEO CONFIG", 20, 20, &menuctx);
+    
+    gfx_menuitem_select("HDMI Resolution", hdmi_mode_names, NUM_HDMI_MODES, &mode_idx);
+    if( mode_idx != 0 )
+        gfx_menuitem_select("VSync Mode", vsync_modes, 3, &vsync_adjust);
+
+    if (mode_idx != applied_mode_idx || vsync_adjust != applied_vsync_adjust)
+    {
+        if (gfx_menuitem_button("Apply Changes"))
+        {
+            if( mode_idx )
+                hdmi_set_mode(&hdmi_modes[mode_idx], vsync_adjust, 60.0);
+            else
+                hdmi_clear_mode();
+            applied_mode_idx = mode_idx;
+            applied_vsync_adjust = vsync_adjust;
+        }
+    }
+
+    gfx_end_menu();
+
+    if (input_pressed() & (INPUT_MENU | INPUT_BACK))
+    {
+        return false;
+    }
+    else
+    {
+        return true;
+    }
 }
 
 uint32_t vblank_count = 0;
@@ -204,32 +199,16 @@ void wait_vblank()
 }
 
 
-static void config_ntsc_224p()
+static void init_sampling_ui()
 {
-    crtc->clk_numer = 1;
-    crtc->clk_denom = 4;
-
-    crtc->hact = 320;
-    crtc->hfp = 8;
-    crtc->hs = 32;
-    crtc->hbp = 40;
-
-    crtc->vact = 224;
-    crtc->vfp = 10;
-    crtc->vs = 6;
-    crtc->vbp = 10;
-
-    tile_ctrl->hofs = -40;
-    tile_ctrl->vofs = -10;
-
-    // Sample rectangles
-    draw_rect(0x8f, 0, 1, 11, 6);
-    draw_rect(0x8f, 0, 11, 11, 6);
-    draw_rect(0x8f, 0, 21, 11, 6);
-
-    for( int i = 0; i < 16; i++ )
+    for( int i = 0; i < 2; i++ )
     {
-        draw_rect(0x90 + i, 16+i, 21, 1, 10);
+        gfx_pageflip();
+        gfx_clear();
+        gfx_pen256(0x8f);
+        gfx_rect(0, 1, 11, 6);
+        gfx_rect(0, 11, 11, 6);
+        gfx_rect(0, 21, 11, 6);
     }
 
     status.x = 14;
@@ -324,13 +303,86 @@ void update_sample_status()
     snprintf(status.lines[3], STATUS_W, "Max: %s ms", ms_str2);
 }
 
+typedef enum { MODE_SAMPLING, MODE_MENU } MainMode;
+
+void do_sampling()
+{
+    uint32_t cur_ticks = read_ticks();
+    uint32_t state_ticks = cur_ticks - state_start_ticks;
+
+    switch (state)
+    {
+        case ST_CLEAR:
+            palette_ram[0x8f] = 0x0000;
+            set_state(ST_WAIT_CLEAR);
+            break;
+
+        case ST_WAIT_CLEAR:
+            if (state_ticks >= WAIT_CLEAR_TICKS)
+            {
+                set_state(ST_START_SAMPLE);
+            }
+            break;
+
+        case ST_START_SAMPLE:
+            set_state(ST_WAIT_SAMPLE);
+            palette_ram[0x8f] = 0xffff;
+            sample_seq++;
+            break;
+
+        case ST_WAIT_SAMPLE:
+            if (state_ticks < MIN_SAMPLE_TICKS)
+            {
+                break;
+            }
+
+            if (state_ticks > MAX_SAMPLE_TICKS)
+            {
+                set_state(ST_CLEAR);
+                record_missing_sample();
+            }
+            else if (sample_seq == frame_seq && sample_seq == sensor_seq)
+            {
+                set_state(ST_CLEAR);
+                uint32_t tick_diff = sensor_ticks - frame_ticks;
+                record_new_sample(tick_diff);
+            }
+            break;
+
+        default:
+            set_state(ST_CLEAR);
+            break;
+    }
+
+    draw_status();
+
+    switch (sample_status)
+    {
+        case MISSING_SAMPLE:
+            status.colors[0] = 1;
+            snprintf(status.lines[0], STATUS_W, "CUR: NO SAMPLE");
+            break;
+
+        case NEW_SAMPLE:
+            update_sample_status();
+            break;
+
+        case NO_SAMPLE:
+        default:
+            break;
+    }
+
+    snprintf(status.lines[3], STATUS_W, "GAMEPAD: %02X", input_state());
+
+    sample_status = NO_SAMPLE;
+}
+
 int main(int argc, char *argv[])
 {
     char tmp[64];
 
-    init_hps_config();
+    MainMode mode = MODE_SAMPLING;
 
-    memsetw(vram, 0, 128 * 128);
     memcpyw(palette_ram, game_palette, 256);
     palette_ram[0x8f] = 0x0000;
 
@@ -341,85 +393,49 @@ int main(int argc, char *argv[])
 
     *user_io = 0xffff;
 
-
     memset(&status, 0, sizeof(status));
-    config_ntsc_224p();
+    gfx_set_ntsc_224p();
 
     enable_interrupts();
+
+    bool new_mode = true;
 
     while (true)
     {
         wait_vblank();
+        gfx_pageflip();
         input_poll();
 
-        uint32_t cur_ticks = read_ticks();
-        uint32_t state_ticks = cur_ticks - state_start_ticks;
-
-        switch (state)
+        if (mode == MODE_SAMPLING)
         {
-            case ST_CLEAR:
-                palette_ram[0x8f] = 0x0000;
-                set_state(ST_WAIT_CLEAR);
-                break;
-
-            case ST_WAIT_CLEAR:
-                if (state_ticks >= WAIT_CLEAR_TICKS)
+            if (new_mode)
+            {
+                init_sampling_ui();
+                new_mode = false;
+            }
+            else
+            {
+                do_sampling();
+                if (input_pressed() & INPUT_MENU)
                 {
-                    set_state(ST_START_SAMPLE);
+                    mode = MODE_MENU;
+                    new_mode = true;
                 }
-                break;
-
-            case ST_START_SAMPLE:
-                set_state(ST_WAIT_SAMPLE);
-                palette_ram[0x8f] = 0xffff;
-                sample_seq++;
-                break;
-
-            case ST_WAIT_SAMPLE:
-                if (state_ticks < MIN_SAMPLE_TICKS)
-                {
-                    break;
-                }
-
-                if (state_ticks > MAX_SAMPLE_TICKS)
-                {
-                    set_state(ST_CLEAR);
-                    record_missing_sample();
-                }
-                else if (sample_seq == frame_seq && sample_seq == sensor_seq)
-                {
-                    set_state(ST_CLEAR);
-                    uint32_t tick_diff = sensor_ticks - frame_ticks;
-                    record_new_sample(tick_diff);
-                }
-                break;
-
-            default:
-                set_state(ST_CLEAR);
-                break;
+            }
+        }
+        else if (mode == MODE_MENU)
+        {
+            if( !draw_menu(new_mode) )
+            {
+                mode = MODE_SAMPLING;
+                new_mode = true;
+            }
+            else
+            {
+                new_mode = false;
+            }
         }
 
-        draw_status();
-
-        switch (sample_status)
-        {
-            case MISSING_SAMPLE:
-                status.colors[0] = 1;
-                snprintf(status.lines[0], STATUS_W, "CUR: NO SAMPLE");
-                break;
-
-            case NEW_SAMPLE:
-                update_sample_status();
-                break;
-
-            case NO_SAMPLE:
-            default:
-                break;
-        }
-
-        //snprintf(status.lines[3], STATUS_W, "USER: %02X", *user_io);
-
-        sample_status = NO_SAMPLE;
     }
 
     return 0;

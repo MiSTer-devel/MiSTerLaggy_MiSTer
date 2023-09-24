@@ -214,6 +214,16 @@ always @(posedge FPGA_CLK2_50) begin
 	end
 end
 
+
+///////////////////////// VIDEO TEST I/O ////////////////////////////////
+wire vio_en;
+wire vio_strobe;
+reg [15:0] vio_dout;
+wire [15:0] vio_din;
+reg vio_override = 0;
+
+
+
 /////////////////////////  HPS I/O  /////////////////////////////////////
 
 // gp_in[31] = 0 - quick flag that FPGA is initialized (HPS reads 1 when FPGA is not in user mode)
@@ -335,6 +345,12 @@ always@(posedge clk_sys) begin
 	reg  [7:0] cmd;
 	reg        has_cmd;
 	reg  [7:0] cnt = 0;
+
+	reg  [7:0] vio_cmd;
+	reg        vio_has_cmd;
+	reg  [7:0] vio_cnt = 0;
+	reg  [1:0] vio_cfg = 0;
+
 	reg        vs_d0,vs_d1,vs_d2;
 	reg  [4:0] acx_att;
 	reg  [7:0] fb_crc;
@@ -344,17 +360,16 @@ always@(posedge clk_sys) begin
 `ifndef MISTER_DEBUG_NOHDMI
 	shadowmask_wr <= 0;
 `endif
-
-	if(~io_uio) begin
+	if(reset) begin
+		vio_override <= 0;
+	end else if(~io_uio) begin
 		has_cmd <= 0;
 		cmd <= 0;
 		areset <= 0;
 		acx_att <= 0;
 		acx <= acx >> acx_att;
 		io_dout_sys <= 0;
-	end
-	else
-	if(io_strobe) begin
+	end else if(io_strobe) begin
 		io_dout_sys <= 0;
 		if(!has_cmd) begin
 			has_cmd <= 1;
@@ -384,7 +399,7 @@ always@(posedge clk_sys) begin
 				cfg_set <= 1;
 				scaler_out <= 1;
 			end
-			if(cmd == 'h20) begin
+			if((cmd == 'h20) && ~vio_override) begin
 				cfg_set <= 0;
 				if(cnt<8) begin
 					case(cnt[2:0])
@@ -494,6 +509,45 @@ always@(posedge clk_sys) begin
 				endcase
 			end
 `endif
+		end
+	end
+
+	if(~vio_en) begin
+		vio_has_cmd <= 0;
+		vio_cmd <= 0;
+		vio_dout <= 0;
+	end else if(vio_strobe) begin
+		vio_dout <= 0;
+		if(!vio_has_cmd) begin
+			vio_has_cmd <= 1;
+			vio_cmd <= vio_din[7:0];
+			vio_cnt <= 0;
+		end else begin
+			vio_cnt <= vio_cnt + 1'd1;
+			if(vio_cmd == 'h01) begin
+				case(vio_cnt)
+					0: WIDTH  <= vio_din[11:0];
+					1: HFP    <= vio_din[11:0];
+					2: HS     <= {vio_din[15], vio_din[11:0]};
+					3: HBP    <= vio_din[11:0];
+					4: HEIGHT <= vio_din[11:0];
+					5: VFP    <= vio_din[11:0];
+					6: VS     <= {vio_din[15], vio_din[11:0]};
+					7: VBP    <= vio_din[11:0];
+					8: lowlat <= vio_din[0];
+				endcase
+			end else if (vio_cmd == 'h02) begin
+				if (vio_cnt==0) cfg_custom_p1 <= vio_din[5:0];
+				if (vio_cnt==1) cfg_custom_p2[15:0]  <= vio_din;
+				if (vio_cnt==2) begin
+					cfg_custom_p2[31:16] <= vio_din;
+					cfg_custom_t <= ~cfg_custom_t;
+				end
+			end else if(vio_cmd == 'h03) begin
+				vio_override <= vio_din[0];
+			end else if(vio_cmd == 'h04) begin
+				cfg_set <= vio_din[0];
+			end
 		end
 	end
 
@@ -1752,7 +1806,13 @@ emu emu
 	.UART_DSR(uart_dtr),
 
 	.USER_OUT(user_out),
-	.USER_IN(user_in)
+	.USER_IN(user_in),
+
+	.VIO_EN(vio_en),
+	.VIO_STROBE(vio_strobe),
+	.VIO_DOUT(vio_dout),
+	.VIO_DIN(vio_din),
+	.VIO_CFG({14'd0, vga_scaler, direct_video})
 );
 
 endmodule

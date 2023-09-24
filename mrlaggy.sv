@@ -168,7 +168,13 @@ module emu
 	input   [6:0] USER_IN,
 	output  [6:0] USER_OUT,
 
-	input         OSD_STATUS
+	input         OSD_STATUS,
+
+	output        VIO_EN,
+	output        VIO_STROBE,
+	input  [15:0] VIO_DOUT,
+	output [15:0] VIO_DIN,
+	input  [15:0] VIO_CFG
 );
 
 ///////// Default values for ports not used in this core /////////
@@ -303,7 +309,13 @@ system system
 	.ioctl_addr(ioctl_addr),
 	.ioctl_dout(ioctl_dout),
 
-	.EXT_BUS(EXT_BUS)
+	.EXT_BUS(EXT_BUS),
+
+	.vio_en(VIO_EN),
+	.vio_strobe(VIO_STROBE),
+	.vio_dout(VIO_DOUT),
+	.vio_din(VIO_DIN),
+	.vio_cfg(VIO_CFG)
 );
 
 assign CLK_VIDEO = clk_sys;

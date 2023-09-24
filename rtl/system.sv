@@ -28,7 +28,13 @@ module system
     input [26:0] ioctl_addr,
     input [15:0] ioctl_dout,
 
-	inout [35:0] EXT_BUS
+	inout [35:0] EXT_BUS,
+
+	output reg    vio_en,
+	output reg    vio_strobe,
+	input  [15:0] vio_dout,
+	output reg [15:0] vio_din,
+	input  [15:0] vio_cfg
 );
 
 reg phi1, phi2;
@@ -57,6 +63,7 @@ wire tilemap_ram_sel = cpu_addr[23:16] == 8'h90;
 wire tilemap_reg_sel = cpu_addr[23:16] == 8'h91;
 wire tilemap_sel = tilemap_ram_sel | tilemap_reg_sel;
 wire pal_sel = cpu_addr[23:16] == 8'h92;
+wire vio_sel = cpu_addr[23:16] == 8'h60;
 wire a1 = cpu_addr[1];
 
 wire [15:0] cpu_din = ram_sel ? ram_dout :
@@ -67,6 +74,7 @@ wire [15:0] cpu_din = ram_sel ? ram_dout :
 					  (ticks_sel & ~a1) ? ticks_latch[31:16] :
 					  user_sel ? { 9'd0, user_in[6:0] } :
 					  pad_sel ? { 1'd0, gamepad } :
+					  vio_sel ? vio_dout :
 					  rom_dout;
 
 wire [15:0] cpu_dout;
@@ -108,15 +116,31 @@ always_ff @(posedge clk) begin
 end
 
 always_ff @(posedge clk) begin
+	reg prev_strobe;
 	if (reset) begin
 		ticks <= 32'd0;
 		hps_valid <= 0;
+		vio_en <= 0;
+		vio_strobe <= 0;
+		prev_strobe <= 0;
 	end else begin
 		if (ticks_sel & ~cpu_rw) ticks_latch <= ticks;
 		ticks <= ticks + 32'd1;
 
 		if (user_sel & ~cpu_rw & ~cpu_ds_n[0]) user_out <= cpu_dout[6:0];
 		if (hps_valid_sel & ~cpu_rw & ~cpu_ds_n[0]) hps_valid <= cpu_dout[0];
+
+		prev_strobe <= 0;
+		vio_strobe <= 0;
+		if (vio_sel & ~cpu_rw & ~|cpu_ds_n) begin
+			if (cpu_addr[15:0] == 16'h8000) begin
+				vio_en <= cpu_dout[0];
+			end else if (cpu_addr[15:0] == 16'h0000) begin
+				prev_strobe <= 1;
+				vio_strobe <= ~prev_strobe;
+				vio_din <= cpu_dout;
+			end
+		end
 	end
 end
 

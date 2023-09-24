@@ -63,4 +63,11 @@ static inline void memcpy(void *a, const void *b, size_t len)
     memcpyb(a, b, len);
 }
 
+static inline int strlen(const char *s)
+{
+    const char *p = s;
+    while(*p) { p++; }
+    return p - s;
+}
+
 #endif
