@@ -6,6 +6,13 @@
 
 #define TILE_MAX_W 128
 
+#define CHR_HORIZ 18
+#define CHR_VERT 124
+#define CHR_TR 5
+#define CHR_TL 17
+#define CHR_BR 3
+#define CHR_BL 26
+
 typedef volatile struct
 {
     uint16_t clk_numer;
@@ -79,12 +86,12 @@ void gfx_set_ntsc_224p()
     contexts[0].rw = 40;
     contexts[0].rh = 28;
 
-    page_tile_ctrl[0].hofs = -40;
+    page_tile_ctrl[0].hofs = -31;
     page_tile_ctrl[0].vofs = -10;
     page_vram[0] = vram_base;
 
-    page_tile_ctrl[1].hofs = -40;
-    page_tile_ctrl[1].vofs = (64 * 8) -10;
+    page_tile_ctrl[1].hofs = -31;
+    page_tile_ctrl[1].vofs = (64 * 8) - 10;
     page_vram[1] = vram_base + (TILE_MAX_W * 64);
 
     gfx_pageflip();
@@ -109,7 +116,7 @@ void gfx_pageflip()
 void gfx_clear()
 {
     gfx_push();
-    gfx_pen256(0);
+    gfx_pen(0);
     gfx_rect(0, 0, ctx->rw, ctx->rh);
     gfx_pop();
 }
@@ -152,7 +159,11 @@ void gfx_begin_menu(const char *name, uint16_t w, uint16_t h, MenuContext *menuc
 {
     uint16_t x = (ctx->rw - w) >> 1;
     uint16_t y = (ctx->rh - h) >> 1;
-    gfx_begin_region(x, y, w, h);
+
+    gfx_pen(TEXT_LIME);
+
+    gfx_frame( x, y, w, h );
+    gfx_begin_region(x + 1, y + 1, w - 2, h - 2);
 
     ctx->menuctx = menuctx;
     uint16_t pressed = input_pressed();
@@ -171,7 +182,6 @@ void gfx_begin_menu(const char *name, uint16_t w, uint16_t h, MenuContext *menuc
     if (menuctx->index < 0) menuctx->index = menuctx->count - 1;
     menuctx->count = 0;
 
-    gfx_pen16(6);
     gfx_text_aligned(name, ALIGN_CENTER);
 }
 
@@ -213,16 +223,16 @@ bool gfx_menuitem_select_deferred(const char *label, const char **options, int n
     gfx_newline(1);
     if (selected)
     {
-        gfx_pen16(4);
+        gfx_pen(TEXT_GRAY | TEXT_INVERT);
         gfx_text_aligned(label, ALIGN_LEFT);
-        gfx_pen16(9);
+        gfx_pen(TEXT_GRAY | TEXT_INVERT);
         gfx_text_aligned(options[menuctx->tmp_option_idx], ALIGN_RIGHT);
     }
     else
     {
-        gfx_pen16(2);
+        gfx_pen(TEXT_GRAY);
         gfx_text_aligned(label, ALIGN_LEFT);
-        gfx_pen16(2);
+        gfx_pen(TEXT_GRAY);
         gfx_text_aligned(options[*option_index], ALIGN_RIGHT);
     }
     
@@ -264,16 +274,16 @@ bool gfx_menuitem_select(const char *label, const char **options, int num_option
     gfx_newline(1);
     if (selected)
     {
-        gfx_pen16(4);
+        gfx_pen(TEXT_GRAY | TEXT_INVERT);
         gfx_text_aligned(label, ALIGN_LEFT);
-        gfx_pen16(9);
+        gfx_pen(TEXT_GRAY | TEXT_INVERT);
         gfx_text_aligned(options[*option_index], ALIGN_RIGHT);
     }
     else
     {
-        gfx_pen16(2);
+        gfx_pen(TEXT_GRAY);
         gfx_text_aligned(label, ALIGN_LEFT);
-        gfx_pen16(2);
+        gfx_pen(TEXT_GRAY);
         gfx_text_aligned(options[*option_index], ALIGN_RIGHT);
     }
     
@@ -297,12 +307,12 @@ bool gfx_menuitem_button(const char *label)
     gfx_newline(1);
     if (selected)
     {
-        gfx_pen16(4);
+        gfx_pen(TEXT_GRAY | TEXT_INVERT);
         gfx_text_aligned(label, ALIGN_CENTER);
     }
     else
     {
-        gfx_pen16(2);
+        gfx_pen(TEXT_GRAY);
         gfx_text_aligned(label, ALIGN_CENTER);
     }
     
@@ -310,26 +320,45 @@ bool gfx_menuitem_button(const char *label)
     return changed;
 }
 
-void gfx_pen16(int color16)
+void gfx_pen(int color)
 {
-    ctx->pen = color16 << 4;
-}
-
-void gfx_pen256(int color256)
-{
-    ctx->pen = color256;
+    ctx->pen = color;
 }
 
 void gfx_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
 {
     int ofs = ( (ctx->ry + y) * TILE_MAX_W ) + x + ctx->rx;
-    uint16_t tile = ( ( ctx->pen & 0xf0 ) << 8 ) | ( 0x10 + ( ctx->pen & 0x0f ) );
+    uint16_t tile = ctx->pen << 8 | 0x20;
 
     for( int i = 0; i < h; i++ )
     {
         memsetw(&vram[ofs], tile, w);
         ofs += TILE_MAX_W;
     }
+}
+
+void gfx_frame(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
+{
+    uint16_t color = ctx->pen << 8;
+    int ofs = ( (ctx->ry + y) * TILE_MAX_W ) + x + ctx->rx;
+
+    vram[ofs] = color | CHR_TL;
+    vram[ofs + w - 1] = color | CHR_TR;
+    for( int c = 1; c < (w - 1); c++ )
+        vram[ofs + c] = color | CHR_HORIZ;
+    ofs += TILE_MAX_W;
+
+    for( int r = 1; r < (h - 1); r++ )
+    {
+        vram[ofs] = color | CHR_VERT;
+        vram[ofs + w - 1] = color | CHR_VERT;
+        ofs += TILE_MAX_W;
+    }
+
+    vram[ofs] = color | CHR_BL;
+    vram[ofs + w - 1] = color | CHR_BR;
+    for( int c = 1; c < (w - 1); c++ )
+        vram[ofs + c] = color | CHR_HORIZ;
 }
 
 void gfx_text_aligned(const char *str, TextAlign align)
@@ -354,7 +383,7 @@ void gfx_text_aligned(const char *str, TextAlign align)
 
     while(*str)
     {
-        vram[ofs] = ((ctx->pen & 0xf0) << 8) | *str;
+        vram[ofs] = (((uint16_t)ctx->pen) << 8) | *str;
         ofs++;
         x++;
         str++;

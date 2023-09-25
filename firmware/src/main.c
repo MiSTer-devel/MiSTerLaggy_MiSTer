@@ -13,7 +13,7 @@
 #define CLK_KHZ (CLK_MHZ * 1000)
 #define MS_TO_TICKS(ms) ((ms) * CLK_KHZ)
 
-#define RGB(r, g, b) ( ( ((r) & 0xf8) << 7 ) | ( ((g) & 0xf8) << 2 ) | ( ((b) & 0xf8) >> 3 ) );
+#define RGB(r, g, b) ( ( ((r) & 0xf8) << 7 ) | ( ((g) & 0xf8) << 2 ) | ( ((b) & 0xf8) >> 3 ) )
 
 #define WAIT_CLEAR_TICKS MS_TO_TICKS(100)
 #define MIN_SAMPLE_TICKS MS_TO_TICKS(200)
@@ -89,12 +89,12 @@ StatusInfo status;
 static void draw_status()
 {
     gfx_begin_region(status.x, status.y, STATUS_W, STATUS_H);
-    gfx_pen256(0);
+    gfx_pen(0);
     gfx_rect(0, 0, STATUS_W, STATUS_H);
 
     for( int i = 0; i < STATUS_H; i++ )
     {
-        gfx_pen16(status.colors[i]);
+        gfx_pen(status.colors[i]);
         gfx_text(status.lines[i]);
     }
     gfx_end_region();
@@ -205,7 +205,7 @@ static void init_sampling_ui()
     {
         gfx_pageflip();
         gfx_clear();
-        gfx_pen256(0x8f);
+        gfx_pen(0x80);
         gfx_rect(0, 1, 11, 6);
         gfx_rect(0, 11, 11, 6);
         gfx_rect(0, 21, 11, 6);
@@ -286,10 +286,10 @@ void update_sample_status()
 
     uint32_t mean_ticks = total_ticks / history_len;
 
-    status.colors[0] = 0;
-    status.colors[1] = 0;
-    status.colors[2] = 0;
-    status.colors[3] = 0;
+    status.colors[0] = TEXT_GRAY;
+    status.colors[1] = TEXT_GRAY;
+    status.colors[2] = TEXT_GRAY;
+    status.colors[3] = TEXT_GRAY;
 
     char ms_str1[16], ms_str2[16];
     ticks_to_ms_str(latest_sample, ms_str1, 16);
@@ -313,7 +313,7 @@ void do_sampling()
     switch (state)
     {
         case ST_CLEAR:
-            palette_ram[0x8f] = 0x0000;
+            palette_ram[0x80] = 0x0000;
             set_state(ST_WAIT_CLEAR);
             break;
 
@@ -326,7 +326,7 @@ void do_sampling()
 
         case ST_START_SAMPLE:
             set_state(ST_WAIT_SAMPLE);
-            palette_ram[0x8f] = 0xffff;
+            palette_ram[0x80] = 0xffff;
             sample_seq++;
             break;
 
@@ -359,7 +359,7 @@ void do_sampling()
     switch (sample_status)
     {
         case MISSING_SAMPLE:
-            status.colors[0] = 1;
+            status.colors[0] = TEXT_ORANGE;
             snprintf(status.lines[0], STATUS_W, "CUR: NO SAMPLE");
             break;
 
@@ -372,9 +372,40 @@ void do_sampling()
             break;
     }
 
-    snprintf(status.lines[3], STATUS_W, "GAMEPAD: %02X", input_state());
-
     sample_status = NO_SAMPLE;
+}
+
+// https://lospec.com/palette-list/endesga-16
+uint16_t base_palette[16] =
+{
+    RGB(0xe4, 0xa6, 0x72),
+    RGB(0xb8, 0x6f, 0x50),
+    RGB(0x74, 0x3f, 0x39),
+    RGB(0x3f, 0x28, 0x32),
+    RGB(0x9e, 0x28, 0x35),
+    RGB(0xe5, 0x3b, 0x44),
+    RGB(0xfb, 0x92, 0x2b),
+    RGB(0xff, 0xe7, 0x62),
+    RGB(0x63, 0xc6, 0x4d),
+    RGB(0x32, 0x73, 0x45),
+    RGB(0x19, 0x3d, 0x3f),
+    RGB(0x4f, 0x67, 0x81),
+    RGB(0xaf, 0xbf, 0xd2),
+    RGB(0xff, 0xff, 0xff),
+    RGB(0x2c, 0xe8, 0xf4),
+    RGB(0x04, 0x84, 0xd1)
+};
+
+void set_palette()
+{
+    for( int i = 0; i < 16; i++ )
+    {
+        palette_ram[(i << 1) + 0] = RGB(0, 0, 0);
+        palette_ram[(i << 1) + 1] = base_palette[i];
+    }
+    palette_ram[32] = RGB(0,0,0);
+    palette_ram[33] = RGB(0xff,0xff,0xff);
+    palette_ram[0x80] = RGB(0,0,0);
 }
 
 int main(int argc, char *argv[])
@@ -383,13 +414,7 @@ int main(int argc, char *argv[])
 
     MainMode mode = MODE_SAMPLING;
 
-    memcpyw(palette_ram, game_palette, 256);
-    palette_ram[0x8f] = 0x0000;
-
-    for( int i = 0; i < 16; i++ )
-    {
-        palette_ram[0x90 + i] = RGB( i * 16, i * 16, i * 16 );
-    }
+    set_palette();
 
     *user_io = 0xffff;
 

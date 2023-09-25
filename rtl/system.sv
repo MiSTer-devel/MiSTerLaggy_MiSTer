@@ -237,7 +237,7 @@ dualport_unreg_ram #(.width(8), .widthad(8)) pal_ram_0(
 
     .clock_b(clk),
     .wren_b(0),
-    .address_b((|color_idx[3:0]) ? color_idx : 8'h0),
+    .address_b(color_idx),
     .data_b(),
     .q_b(color_rgb[7:0])
 );
@@ -251,7 +251,7 @@ dualport_unreg_ram #(.width(8), .widthad(8)) pal_ram_1(
 
     .clock_b(clk),
     .wren_b(0),
-    .address_b((|color_idx[3:0]) ? color_idx : 8'h0),
+    .address_b(color_idx),
     .data_b(),
     .q_b(color_rgb[15:8])
 );

@@ -39,14 +39,35 @@ void gfx_end_menu();
 bool gfx_menuitem_select(const char *label, const char **options, int num_options, int *option_index);
 bool gfx_menuitem_button(const char *label);
 
-void gfx_pen16(int color16);
-void gfx_pen256(int color256);
+void gfx_pen(int color256);
 
 void gfx_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h);
+void gfx_frame(uint16_t x, uint16_t y, uint16_t w, uint16_t h);
 
 #define gfx_text(x) gfx_text_aligned(x, ALIGN_LEFT);
 void gfx_text_aligned(const char *str, TextAlign align);
 void gfx_sameline();
 void gfx_newline(int n);
+
+#define TEXT_INVERT      0x01
+#define TEXT_STRAW       0x00
+#define TEXT_TAN         0x02
+#define TEXT_BROWN       0x04
+#define TEXT_DARK_BROWN  0x06
+#define TEXT_DARK_RED    0x08
+#define TEXT_RED         0x0a
+#define TEXT_ORANGE      0x0c
+#define TEXT_YELLOW      0x0e
+#define TEXT_LIME        0x10
+#define TEXT_GREEN       0x12
+#define TEXT_DARK_GREEN  0x14
+#define TEXT_SLATE       0x16
+#define TEXT_GRAY        0x18
+#define TEXT_WHITE       0x1a
+#define TEXT_AQUA        0x1c
+#define TEXT_BLUE        0x1e
+
+
+
 
 #endif // GFX_H

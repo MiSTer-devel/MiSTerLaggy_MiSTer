@@ -218,10 +218,7 @@ localparam CONF_STR = {
 	"-;",
 	"T[0],Reset;",
 	"J1,Ok,Back,Menu;",
-	"Jn,A,B,Start;",
-	"v,0;", // [optional] config version 0-99. 
-	        // If CONF_STR options are changed in incompatible way, then change version number too,
-			  // so all options will get default values on first start.
+	"jn,A,B,Start;",
 	"V,v",`BUILD_DATE 
 };
 

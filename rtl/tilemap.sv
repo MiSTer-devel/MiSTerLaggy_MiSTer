@@ -61,10 +61,10 @@ dualport_ram #(.width(8), .widthad(14)) ram_1
     .q_b(tileref_q[15:8])
 );
 
-singleport_ram #(.widthad(13), .width(32), .name("GFX"), .init_file("roms/gfx.mif")) gfx_rom(
+singleport_ram #(.widthad(11), .width(32), .name("GFX"), .init_file("roms/gfx.mif")) gfx_rom(
     .clock(clk),
     .wren(0),
-    .address({tileref[9:0], V[2:0]}),
+    .address({tileref[7:0], V[2:0]}),
     .data(),
     .q(gfx_data)
 );
@@ -73,7 +73,7 @@ reg [11:0] vcnt_prev;
 reg [15:0] tileref;
 wire [31:0] gfx_data;
 reg [31:0] shiftout;
-reg [3:0] color;
+reg [7:0] color;
 reg [2:0] stage;
 
 always_ff @(posedge clk) begin
@@ -91,13 +91,13 @@ always_ff @(posedge clk) begin
             stage <= 3'd0;
         end
 
-        color_out <= { color[3:0], shiftout[31:28]};
+        color_out <= { 4'd0, shiftout[31:28] } + color;
         shiftout <= {shiftout[27:0], 4'b0000};
 
         case(H[2:0])
         3'd0: tileref <= tileref_q;
         3'd7: begin
-            color <= tileref[15:12];
+            color <= tileref[15:8];
             shiftout <= gfx_data;
         end
         endcase
