@@ -197,7 +197,7 @@
       (scale (xyz 1 1 1))
       (rotate (xyz 0 0 0))
     )
-    (model "${KIPRJMOD}/../GT-USB-7010ASV.step"
+    (model "${KIPRJMOD}/GT-USB-7010ASV.step"
       (offset (xyz 0 3.75 1.7))
       (scale (xyz 1 1 1))
       (rotate (xyz -90 0 90))
