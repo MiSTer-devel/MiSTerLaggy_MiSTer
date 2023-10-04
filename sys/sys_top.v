@@ -1812,7 +1812,9 @@ emu emu
 	.VIO_STROBE(vio_strobe),
 	.VIO_DOUT(vio_dout),
 	.VIO_DIN(vio_din),
-	.VIO_CFG({14'd0, vga_scaler, direct_video})
+	.VIO_CFG({14'd0, vga_scaler, direct_video}),
+
+	.HDMI_VBL(hdmi_vbl)
 );
 
 endmodule

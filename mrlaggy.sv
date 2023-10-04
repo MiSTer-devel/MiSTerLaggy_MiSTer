@@ -174,7 +174,9 @@ module emu
 	output        VIO_STROBE,
 	input  [15:0] VIO_DOUT,
 	output [15:0] VIO_DIN,
-	input  [15:0] VIO_CFG
+	input  [15:0] VIO_CFG,
+
+	input         HDMI_VBL
 );
 
 ///////// Default values for ports not used in this core /////////
@@ -232,6 +234,7 @@ wire ioctl_download, ioctl_wr;
 wire [15:0] ioctl_index, ioctl_dout;
 wire [26:0] ioctl_addr;
 wire [35:0] EXT_BUS;
+wire new_vmode;
 
 hps_io #(.CONF_STR(CONF_STR), .WIDE(1)) hps_io
 (
@@ -255,7 +258,9 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1)) hps_io
 	.ioctl_index(ioctl_index),
 	.ioctl_addr(ioctl_addr),
 	.ioctl_dout(ioctl_dout),
-	.ioctl_wait(0)
+	.ioctl_wait(0),
+
+	.new_vmode(new_vmode)
 );
 
 ///////////////////////   CLOCKS   ///////////////////////////////
@@ -312,7 +317,11 @@ system system
 	.vio_strobe(VIO_STROBE),
 	.vio_dout(VIO_DOUT),
 	.vio_din(VIO_DIN),
-	.vio_cfg(VIO_CFG)
+	.vio_cfg(VIO_CFG),
+
+	.hdmi_vblank(HDMI_VBL),
+
+	.new_vmode(new_vmode)
 );
 
 assign CLK_VIDEO = clk_sys;

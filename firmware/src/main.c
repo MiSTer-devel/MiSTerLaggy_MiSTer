@@ -28,6 +28,17 @@ typedef volatile struct
 uint16_t *palette_ram = (uint16_t *)0x920000;
 Ticks *ticks = (Ticks *)0x200000;
 volatile uint16_t *user_io = (volatile uint16_t *)0x300000;
+uint16_t *int_ctrl = (uint16_t *)0x700000;
+
+#define INT2_CTRL(x) (((x) & 0xf) << 0)
+#define INT4_CTRL(x) (((x) & 0xf) << 4)
+#define INT6_CTRL(x) (((x) & 0xf) << 8)
+#define INT_SRC_NONE 0
+#define INT_SRC_VBLANK 1
+#define INT_SRC_HDMI_VBLANK 2
+#define INT_SRC_USERIO 3
+#define INT_INVERT 0x8
+
 
 volatile uint32_t int2_count = 0;
 
@@ -100,81 +111,119 @@ static void draw_status()
     gfx_end_region();
 }
 
-#define NUM_HDMI_MODES 15
-
-HDMIMode hdmi_modes[NUM_HDMI_MODES] =
+typedef struct
 {
-    {    0,   0,   0,   0,    0,  0,  0,  0,   0    }, //0  Default
-    { 1280, 110,  40, 220,  720,  5,  5, 20,  74.25 }, //1  1280x720@60
-	{ 1024,  24, 136, 160,  768,  3,  6, 29,  65,   }, //2  1024x768@60
-	{  720,  16,  62,  60,  480,  9,  6, 30,  27    }, //3  720x480@60
-	{  720,  12,  64,  68,  576,  5,  5, 39,  27    }, //4  720x576@50
-	{ 1280,  48, 112, 248, 1024,  1,  3, 38, 108    }, //5  1280x1024@60
-	{  800,  40, 128,  88,  600,  1,  4, 23,  40    }, //6  800x600@60
-	{  640,  16,  96,  48,  480, 10,  2, 33,  25.175 }, //7  640x480@60
-	{ 1280, 440,  40, 220,  720,  5,  5, 20,  74.25  }, //8  1280x720@50
-	{ 1920,  88,  44, 148, 1080,  4,  5, 36, 148.5   }, //9  1920x1080@60
-	{ 1920, 528,  44, 148, 1080,  4,  5, 36, 148.5   }, //10  1920x1080@50
-	{ 1366,  70, 143, 213,  768,  3,  3, 24,  85.5   }, //11 1366x768@60
-	{ 1024,  40, 104, 144,  600,  1,  3, 18,  48.96  }, //12 1024x600@60
-	{ 1920,  48,  32,  80, 1440,  2,  4, 38, 185.203 }, //13 1920x1440@60
-	{ 2048,  48,  32,  80, 1536,  2,  4, 38, 209.318 }, //14 2048x1536@60
+    uint16_t width;
+    uint16_t height;
+} HDMIResolution;
+
+static const HDMIResolution hdmi_resolutions[] =
+{
+    {  640,  480 },
+    {  720,  480 },
+    {  720,  576 },
+    {  800,  600 },
+    { 1024,  600 },
+    { 1024,  768 },
+    { 1280,  720 },
+    { 1280, 1024 },
+    { 1366,  768 },
+    { 1920, 1080 },
+    { 1920, 1440 },
+    { 2048, 1536 }
 };
 
-const char *hdmi_mode_names[NUM_HDMI_MODES] =
+static const char *hdmi_resolution_names[] =
 {
-    "Default",
-    "1280x720 60Hz",
-    "1024x768 60Hz",
-    "720x480 60Hz",
-    "720x576 50Hz",
-    "1280x1024 60Hz",
-    "800x600 60Hz",
-    "640x480 60Hz",
-    "1280x720 50Hz",
-    "1920x1080 60Hz",
-    "1920x1080 50Hz",
-    "1366x768 60Hz",
-    "1024x600 60Hz",
-    "1920x1440 60Hz",
-    "2048x1536 60Hz"
+    "640x480",
+    "720x480",
+    "720x576",
+    "800x600",
+    "1024x600",
+    "1024x768",
+    "720p",
+    "1280x1024",
+    "1366x768",
+    "1080p",
+    "1440p",
+    "2048x1536"
 };
 
-const char *vsync_modes[3] = { "Match Output", "Match Input", "Low Latency" };
+static const float hdmi_refresh_rates[] =
+{
+    24,
+    30,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    59.94,
+    60,
+    62,
+    72,
+    90,
+    120,
+};
+
+static const char *hdmi_refresh_rate_names[] =
+{
+    "24hz",
+    "30hz",
+    "50hz",
+    "51hz",
+    "52hz",
+    "53hz",
+    "54hz",
+    "55hz",
+    "56hz",
+    "57hz",
+    "58hz",
+    "59hz",
+    "59.94hz",
+    "60hz",
+    "62hz",
+    "72hz",
+    "90hz",
+    "120hz"
+};
+
+
 static bool draw_menu(bool reset)
 {
     static int mode_idx = 0;
-    static int vsync_adjust = 0;
-
-    static int applied_mode_idx = 0;
-    static int applied_vsync_adjust = 0;
+    static int refresh_idx = 0;
+    static int applied_mode_idx = -1;
+    static int applied_refresh_idx = -1;
 
     static MenuContext menuctx = INIT_MENU_CONTEXT;
 
     if (reset)
     {
         mode_idx = applied_mode_idx;
-        vsync_adjust = applied_vsync_adjust;
     }
 
     gfx_clear();
 
     gfx_begin_menu("VIDEO CONFIG", 20, 20, &menuctx);
     
-    gfx_menuitem_select("HDMI Resolution", hdmi_mode_names, NUM_HDMI_MODES, &mode_idx);
-    if( mode_idx != 0 )
-        gfx_menuitem_select("VSync Mode", vsync_modes, 3, &vsync_adjust);
+    gfx_menuitem_select("HDMI Resolution", hdmi_resolution_names, ARRAY_COUNT(hdmi_resolution_names), &mode_idx);
+    gfx_menuitem_select("Refresh Rate", hdmi_refresh_rate_names, ARRAY_COUNT(hdmi_refresh_rate_names), &refresh_idx);
 
-    if (mode_idx != applied_mode_idx || vsync_adjust != applied_vsync_adjust)
+    if (mode_idx != applied_mode_idx || refresh_idx != applied_refresh_idx)
     {
         if (gfx_menuitem_button("Apply Changes"))
         {
-            if( mode_idx )
-                hdmi_set_mode(&hdmi_modes[mode_idx], vsync_adjust, 60.0);
-            else
-                hdmi_clear_mode();
+            *int_ctrl = INT2_CTRL(INT_SRC_VBLANK) | INT4_CTRL(INT_SRC_HDMI_VBLANK | INT_INVERT) | INT6_CTRL(INT_SRC_USERIO);
+            float real_hz = gfx_set_240p(hdmi_refresh_rates[refresh_idx]);
+            hdmi_set_mode(hdmi_resolutions[mode_idx].width, hdmi_resolutions[mode_idx].height, real_hz);
             applied_mode_idx = mode_idx;
-            applied_vsync_adjust = vsync_adjust;
+            applied_refresh_idx = refresh_idx;
         }
     }
 
@@ -206,9 +255,9 @@ static void init_sampling_ui()
         gfx_pageflip();
         gfx_clear();
         gfx_pen(0x80);
-        gfx_rect(0, 1, 11, 6);
-        gfx_rect(0, 11, 11, 6);
-        gfx_rect(0, 21, 11, 6);
+        gfx_rect(0, 0, 11, 6);
+        gfx_rect(0, 12, 11, 6);
+        gfx_rect(0, 24, 11, 6);
     }
 
     status.x = 14;
@@ -417,9 +466,10 @@ int main(int argc, char *argv[])
     set_palette();
 
     *user_io = 0xffff;
+    *int_ctrl = INT2_CTRL(INT_SRC_VBLANK) | INT4_CTRL(INT_SRC_VBLANK | INT_INVERT) | INT6_CTRL(INT_SRC_USERIO);
 
     memset(&status, 0, sizeof(status));
-    gfx_set_ntsc_224p();
+    gfx_set_240p(60.0);
 
     enable_interrupts();
 

@@ -15,7 +15,7 @@ typedef struct
     float mhz;
 } HDMIMode;
 
-void hdmi_set_mode(HDMIMode *mode, int vsync_adjust, float hz);
-void hdmi_clear_mode();
+void hdmi_set_mode(uint16_t width, uint16_t height, float hz);
+
 
 #endif // HDMI_H

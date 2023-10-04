@@ -23,7 +23,7 @@ typedef struct
 
 #define INIT_MENU_CONTEXT { .index = -1, .count = -1, .tmp_option_idx = -1 }
 
-void gfx_set_ntsc_224p();
+float gfx_set_240p(float hz);
 
 void gfx_pageflip();
 

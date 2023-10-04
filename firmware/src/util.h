@@ -70,4 +70,6 @@ static inline int strlen(const char *s)
     return p - s;
 }
 
+#define ARRAY_COUNT(x) (sizeof((x)) / sizeof((x)[0]))
+
 #endif

@@ -66,38 +66,44 @@ Context contexts[NUM_CTX];
 int context_idx = 0;
 Context *ctx = &contexts[0];
 
-void gfx_set_ntsc_224p()
+float gfx_set_240p(float hz)
 {
-    crtc->clk_numer = 1;
-    crtc->clk_denom = 4;
+    const float total_pix = 400.0f * 253.0f;
+    double pix_hz = ( hz * total_pix );
+    double num = pix_hz / 24000.0;
+    int rounded_num = num + 0.5;
+
+    float real_hz = (24000.0 * rounded_num) / total_pix;
+
+    crtc->clk_numer = rounded_num;
+    crtc->clk_denom = 1000;
 
     crtc->hact = 320;
     crtc->hfp = 8;
     crtc->hs = 32;
     crtc->hbp = 40;
 
-    crtc->vact = 224;
-    crtc->vfp = 10;
-    crtc->vs = 6;
-    crtc->vbp = 10;
+    crtc->vact = 240;
+    crtc->vfp = 3;
+    crtc->vs = 4;
+    crtc->vbp = 6;
 
     contexts[0].rx = 0;
     contexts[0].ry = 0;
     contexts[0].rw = 40;
-    contexts[0].rh = 28;
+    contexts[0].rh = 30;
 
     page_tile_ctrl[0].hofs = -31;
-    page_tile_ctrl[0].vofs = -10;
+    page_tile_ctrl[0].vofs = -6;
     page_vram[0] = vram_base;
 
     page_tile_ctrl[1].hofs = -31;
-    page_tile_ctrl[1].vofs = (64 * 8) - 10;
+    page_tile_ctrl[1].vofs = (64 * 8) - 6;
     page_vram[1] = vram_base + (TILE_MAX_W * 64);
 
     gfx_pageflip();
 
-    tile_ctrl->hofs = -40;
-    tile_ctrl->vofs = -10;
+    return real_hz;
 }
 
 void gfx_pageflip()

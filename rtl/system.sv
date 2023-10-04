@@ -34,11 +34,15 @@ module system
 	output reg    vio_strobe,
 	input  [15:0] vio_dout,
 	output reg [15:0] vio_din,
-	input  [15:0] vio_cfg
+	input  [15:0] vio_cfg,
+
+	input         hdmi_vblank,
+	output reg    new_vmode
 );
 
 reg phi1, phi2;
 reg [31:0] ticks, ticks_latch;
+reg [15:0] int_ctrl;
 
 always_ff @(posedge clk) begin
 	phi1 <= ~phi1;
@@ -64,6 +68,8 @@ wire tilemap_reg_sel = cpu_addr[23:16] == 8'h91;
 wire tilemap_sel = tilemap_ram_sel | tilemap_reg_sel;
 wire pal_sel = cpu_addr[23:16] == 8'h92;
 wire vio_sel = cpu_addr[23:16] == 8'h60;
+wire int_sel = cpu_addr[23:16] == 8'h70;
+
 wire a1 = cpu_addr[1];
 
 wire [15:0] cpu_din = ram_sel ? ram_dout :
@@ -75,6 +81,7 @@ wire [15:0] cpu_din = ram_sel ? ram_dout :
 					  user_sel ? { 9'd0, user_in[6:0] } :
 					  pad_sel ? { 1'd0, gamepad } :
 					  vio_sel ? vio_dout :
+					  int_sel ? int_ctrl :
 					  rom_dout;
 
 wire [15:0] cpu_dout;
@@ -123,18 +130,22 @@ always_ff @(posedge clk) begin
 		vio_en <= 0;
 		vio_strobe <= 0;
 		prev_strobe <= 0;
+		int_ctrl <= 16'd0;
 	end else begin
 		if (ticks_sel & ~cpu_rw) ticks_latch <= ticks;
 		ticks <= ticks + 32'd1;
 
 		if (user_sel & ~cpu_rw & ~cpu_ds_n[0]) user_out <= cpu_dout[6:0];
 		if (hps_valid_sel & ~cpu_rw & ~cpu_ds_n[0]) hps_valid <= cpu_dout[0];
+		if (int_sel & ~cpu_rw & ~cpu_ds_n[0]) int_ctrl[7:0] <= cpu_dout[7:0];
+		if (int_sel & ~cpu_rw & ~cpu_ds_n[1]) int_ctrl[15:8] <= cpu_dout[15:8];
 
 		prev_strobe <= 0;
 		vio_strobe <= 0;
 		if (vio_sel & ~cpu_rw & ~|cpu_ds_n) begin
 			if (cpu_addr[15:0] == 16'h8000) begin
 				vio_en <= cpu_dout[0];
+				new_vmode <= ~new_vmode;
 			end else if (cpu_addr[15:0] == 16'h0000) begin
 				prev_strobe <= 1;
 				vio_strobe <= ~prev_strobe;
@@ -145,7 +156,12 @@ always_ff @(posedge clk) begin
 end
 
 reg [2:0] intp_prev;
-wire [2:0] intp = { user_in[1], ~VBlank, VBlank };
+
+wire intp0_src = int_ctrl[2:0] == 1 ? VBlank : int_ctrl[2:0] == 2 ? hdmi_vblank : int_ctrl[2:0] == 3 ? user_in[1] : 0;
+wire intp1_src = int_ctrl[6:4] == 1 ? VBlank : int_ctrl[6:4] == 2 ? hdmi_vblank : int_ctrl[6:4] == 3 ? user_in[1] : 0;
+wire intp2_src = int_ctrl[10:8] == 1 ? VBlank : int_ctrl[10:8] == 2 ? hdmi_vblank : int_ctrl[10:8] == 3 ? user_in[1] : 0;
+
+wire [2:0] intp = { int_ctrl[11] ? ~intp2_src : intp2_src, int_ctrl[7] ? ~intp1_src : intp1_src, int_ctrl[3] ? ~intp0_src : intp0_src };
 
 always_ff @(posedge clk) begin
 	if (reset) begin

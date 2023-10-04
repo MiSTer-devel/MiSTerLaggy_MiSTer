@@ -2,6 +2,27 @@
 
 #include "hdmi.h"
 
+#define NUM_HDMI_MODES 14
+
+HDMIMode hdmi_modes[NUM_HDMI_MODES] =
+{
+    { 1280, 110,  40, 220,  720,  5,  5, 20,  74.25 }, //1  1280x720@60
+	{ 1024,  24, 136, 160,  768,  3,  6, 29,  65,   }, //2  1024x768@60
+	{  720,  16,  62,  60,  480,  9,  6, 30,  27    }, //3  720x480@60
+	{  720,  12,  64,  68,  576,  5,  5, 39,  27    }, //4  720x576@50
+	{ 1280,  48, 112, 248, 1024,  1,  3, 38, 108    }, //5  1280x1024@60
+	{  800,  40, 128,  88,  600,  1,  4, 23,  40    }, //6  800x600@60
+	{  640,  16,  96,  48,  480, 10,  2, 33,  25.175 }, //7  640x480@60
+	{ 1280, 440,  40, 220,  720,  5,  5, 20,  74.25  }, //8  1280x720@50
+	{ 1920,  88,  44, 148, 1080,  4,  5, 36, 148.5   }, //9  1920x1080@60
+	{ 1920, 528,  44, 148, 1080,  4,  5, 36, 148.5   }, //10  1920x1080@50
+	{ 1366,  70, 143, 213,  768,  3,  3, 24,  85.5   }, //11 1366x768@60
+	{ 1024,  40, 104, 144,  600,  1,  3, 18,  48.96  }, //12 1024x600@60
+	{ 1920,  48,  32,  80, 1440,  2,  4, 38, 185.203 }, //13 1920x1440@60
+	{ 2048,  48,  32,  80, 1536,  2,  4, 38, 209.318 }, //14 2048x1536@60
+};
+
+
 #define VIO_SET_MODE 1
 #define VIO_SET_PLL 2
 #define VIO_SET_OVERRIDE 3
@@ -142,17 +163,47 @@ static void setPLL(double Fout)
     vio_write_pll(7, k);
 }
 
-void hdmi_set_mode(HDMIMode *mode, int vsync_adjust, float hz)
+static const HDMIMode *hdmi_find_mode(uint16_t width, uint16_t height, float hz)
 {
-    double mhz = mode->mhz;
-
-    if (vsync_adjust != 0)
+    float min_diff = 999999999999;
+    int min_index = -1;
+    for( int i = 0; i < NUM_HDMI_MODES; i++ )
     {
+        const HDMIMode *mode = &hdmi_modes[i];
+        if (mode->hact != width || mode->vact != height) continue;
+
         int32_t h = mode->hact + mode->hfp + mode->hs + mode->hbp;
         int32_t v = mode->vact + mode->vfp + mode->vs + mode->vbp;
-        mhz = h * v * hz;
+        float mhz = h * v * hz;
         mhz /= 1000000.0;
+
+        float diff = mode->mhz - mhz;
+        diff = diff < 0.0 ? -diff : diff;
+        if (min_index == -1 || min_diff > diff)
+        {
+            min_index = i;
+            min_diff = diff;
+        }
     }
+
+    if (min_index >= 0)
+    {
+        return &hdmi_modes[min_index];
+    }
+
+    return 0;
+}
+
+void hdmi_set_mode(uint16_t width, uint16_t height, float hz)
+{
+    const HDMIMode *mode = hdmi_find_mode(width, height, hz);
+
+    if (mode == 0) return;
+
+    int32_t h = mode->hact + mode->hfp + mode->hs + mode->hbp;
+    int32_t v = mode->vact + mode->vfp + mode->vs + mode->vbp;
+    double mhz = h * v * hz;
+    mhz /= 1000000.0;
 
     vio_cmd(VIO_SET_OVERRIDE, 1);
     vio_cmd(VIO_SET_CFG, 0);
@@ -167,16 +218,11 @@ void hdmi_set_mode(HDMIMode *mode, int vsync_adjust, float hz)
     vio_w16(mode->vs);
     vio_w16(mode->vbp);
     
-    vio_w16(vsync_adjust == 2 ? 1 : 0);
+    vio_w16(1);
     
     vio_disable();
 
     setPLL(mhz);
 
     vio_cmd(VIO_SET_CFG, 1);
-}
-
-void hdmi_clear_mode()
-{
-    vio_cmd(VIO_SET_OVERRIDE, 0);
 }
