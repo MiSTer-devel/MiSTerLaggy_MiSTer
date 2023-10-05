@@ -248,6 +248,7 @@ bool gfx_menuitem_select_deferred(const char *label, const char **options, int n
 
 bool gfx_menuitem_select(const char *label, const char **options, int num_options, int *option_index)
 {
+    char txt[40];
     bool changed = false;
     MenuContext *menuctx = ctx->menuctx;
     if( menuctx == NULL ) return false;
@@ -277,22 +278,34 @@ bool gfx_menuitem_select(const char *label, const char **options, int num_option
         }
     }
 
+    const char *value_str = options[*option_index];
+    int width = ctx->rw;
+    int label_len = strlen(label);
+    int value_len = strlen(value_str);
+    int space_len = width - ( 2 + label_len + value_len );
+    space_len = space_len < 0 ? 0 : space_len;
+    char *p = txt;
+    *p++ = 126; // <
+    for( int i = 0; i < label_len; i++ )
+        *p++ = label[i];
+    for( int i = 0; i < space_len; i++ )
+        *p++ = 0x20;
+    for( int i = 0; i < value_len; i++ )
+        *p++ = value_str[i];
+    *p++ = 127; // >
+    *p = '\0';
+
     gfx_newline(1);
     if (selected)
     {
         gfx_pen(TEXT_GRAY | TEXT_INVERT);
-        gfx_text_aligned(label, ALIGN_LEFT);
-        gfx_pen(TEXT_GRAY | TEXT_INVERT);
-        gfx_text_aligned(options[*option_index], ALIGN_RIGHT);
     }
     else
     {
         gfx_pen(TEXT_GRAY);
-        gfx_text_aligned(label, ALIGN_LEFT);
-        gfx_pen(TEXT_GRAY);
-        gfx_text_aligned(options[*option_index], ALIGN_RIGHT);
     }
-    
+    gfx_text(txt);
+
     menuctx->count++;
     return changed;
 }
@@ -376,10 +389,14 @@ void gfx_text_aligned(const char *str, TextAlign align)
     {
         ctx->sameline = false;
         ctx->y = ctx->y > 0 ? ctx->y - 1 : 0;
-        x = ctx->prevx;
     }
-    else if (align & ALIGN_LEFT)
-        x = 0;
+    else
+    {
+        ctx->prevx = 0;
+    }
+    
+    if (align & ALIGN_LEFT)
+        x = ctx->prevx;
     else if (align & ALIGN_RIGHT)
         x = ctx->rw - len;
     else if (align & ALIGN_CENTER)

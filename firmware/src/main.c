@@ -97,6 +97,8 @@ typedef struct
 
 StatusInfo status;
 
+char video_mode_desc[32];
+
 static void draw_status()
 {
     gfx_begin_region(status.x, status.y, STATUS_W, STATUS_H);
@@ -141,11 +143,11 @@ static const char *hdmi_resolution_names[] =
     "800x600",
     "1024x600",
     "1024x768",
-    "720p",
+    "1280x720",
     "1280x1024",
     "1366x768",
-    "1080p",
-    "1440p",
+    "1920x1080",
+    "1920x1440",
     "2048x1536"
 };
 
@@ -203,16 +205,27 @@ static bool draw_menu(bool reset)
 
     static MenuContext menuctx = INIT_MENU_CONTEXT;
 
+    bool close_menu = false;
+
     if (reset)
     {
-        mode_idx = applied_mode_idx;
+        if (applied_mode_idx >= 0)
+        {
+            mode_idx = applied_mode_idx;
+            refresh_idx = applied_refresh_idx;
+        }
+        else
+        {
+            mode_idx = 9;
+            refresh_idx = 13;
+        }
     }
 
     gfx_clear();
 
-    gfx_begin_menu("VIDEO CONFIG", 20, 20, &menuctx);
+    gfx_begin_menu("VIDEO CONFIG", 28, 15, &menuctx);
     
-    gfx_menuitem_select("HDMI Resolution", hdmi_resolution_names, ARRAY_COUNT(hdmi_resolution_names), &mode_idx);
+    gfx_menuitem_select("Resolution", hdmi_resolution_names, ARRAY_COUNT(hdmi_resolution_names), &mode_idx);
     gfx_menuitem_select("Refresh Rate", hdmi_refresh_rate_names, ARRAY_COUNT(hdmi_refresh_rate_names), &refresh_idx);
 
     if (mode_idx != applied_mode_idx || refresh_idx != applied_refresh_idx)
@@ -224,6 +237,9 @@ static bool draw_menu(bool reset)
             hdmi_set_mode(hdmi_resolutions[mode_idx].width, hdmi_resolutions[mode_idx].height, real_hz);
             applied_mode_idx = mode_idx;
             applied_refresh_idx = refresh_idx;
+            close_menu = true;
+
+            snprintf(video_mode_desc, sizeof(video_mode_desc), "%s @ %s", hdmi_resolution_names[mode_idx], hdmi_refresh_rate_names[refresh_idx]);
         }
     }
 
@@ -231,12 +247,10 @@ static bool draw_menu(bool reset)
 
     if (input_pressed() & (INPUT_MENU | INPUT_BACK))
     {
-        return false;
+        close_menu = true;
     }
-    else
-    {
-        return true;
-    }
+
+    return !close_menu;
 }
 
 uint32_t vblank_count = 0;
@@ -255,9 +269,14 @@ static void init_sampling_ui()
         gfx_pageflip();
         gfx_clear();
         gfx_pen(0x80);
-        gfx_rect(0, 0, 11, 6);
-        gfx_rect(0, 12, 11, 6);
-        gfx_rect(0, 24, 11, 6);
+        gfx_rect(0, 0, 11, 4);
+        gfx_rect(0, 13, 11, 4);
+        gfx_rect(0, 26, 11, 4);
+
+        gfx_begin_region(14, 24, 20, 2);
+        gfx_pen(TEXT_AQUA);
+        gfx_text("HDMI: "); gfx_sameline(); gfx_text(video_mode_desc);
+        gfx_end_region();
     }
 
     status.x = 14;
@@ -462,6 +481,7 @@ int main(int argc, char *argv[])
     char tmp[64];
 
     MainMode mode = MODE_SAMPLING;
+    strcpy(video_mode_desc, "MiSTer Default");
 
     set_palette();
 

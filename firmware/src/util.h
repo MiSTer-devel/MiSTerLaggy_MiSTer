@@ -70,6 +70,19 @@ static inline int strlen(const char *s)
     return p - s;
 }
 
+static inline void strcpy(char *dst, const char *src)
+{
+    const char *s = src;
+    char *d = dst;
+    while(*s)
+    {
+        *d = *s;
+        s++;
+        d++;
+    }
+    *d = '\0';
+}
+
 #define ARRAY_COUNT(x) (sizeof((x)) / sizeof((x)[0]))
 
 #endif
