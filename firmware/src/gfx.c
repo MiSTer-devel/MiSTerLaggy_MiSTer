@@ -3,6 +3,7 @@
 #include "gfx.h"
 #include "input.h"
 #include "util.h"
+#include "hdmi.h"
 
 #define TILE_MAX_W 128
 
@@ -13,23 +14,6 @@
 #define CHR_BR 3
 #define CHR_BL 26
 
-typedef volatile struct
-{
-    uint16_t clk_numer;
-    uint16_t clk_denom;
-
-    uint16_t hact;
-    uint16_t hfp;
-    uint16_t hs;
-    uint16_t hbp;
-    uint16_t vact;
-    uint16_t vfp;
-    uint16_t vs;
-    uint16_t vbp;
-
-    uint16_t hcnt;
-    uint16_t vcnt;
-} CRTC;
 
 typedef struct
 {
@@ -38,7 +22,6 @@ typedef struct
 } TilemapCtrl;
 
 
-CRTC *crtc = (CRTC *)0x800000;
 TilemapCtrl *tile_ctrl = (TilemapCtrl *)0x910000;
 
 TilemapCtrl page_tile_ctrl[2];
@@ -66,44 +49,37 @@ Context contexts[NUM_CTX];
 int context_idx = 0;
 Context *ctx = &contexts[0];
 
-float gfx_set_240p(float hz)
+void gfx_set_240p(float hz)
 {
-    const float total_pix = 400.0f * 253.0f;
-    double pix_hz = ( hz * total_pix );
-    double num = pix_hz / 24000.0;
-    int rounded_num = num + 0.5;
+    VideoMode mode;
 
-    float real_hz = (24000.0 * rounded_num) / total_pix;
+    mode.hact = 320;
+    mode.hfp = 8;
+    mode.hs = 32;
+    mode.hbp = 40;
+    mode.vact = 240;
+    mode.vfp = 3;
+    mode.vs = 4;
+    mode.vbp = 6;
 
-    crtc->clk_numer = rounded_num;
-    crtc->clk_denom = 1000;
-
-    crtc->hact = 320;
-    crtc->hfp = 8;
-    crtc->hs = 32;
-    crtc->hbp = 40;
-
-    crtc->vact = 240;
-    crtc->vfp = 3;
-    crtc->vs = 4;
-    crtc->vbp = 6;
+    uint32_t pixels = video_mode_pixels(&mode);
+    mode.mhz = (hz * pixels) / 1000000.0;
+    crt_set_mode(&mode);
 
     contexts[0].rx = 0;
     contexts[0].ry = 0;
     contexts[0].rw = 40;
     contexts[0].rh = 30;
 
-    page_tile_ctrl[0].hofs = -31;
-    page_tile_ctrl[0].vofs = -6;
+    page_tile_ctrl[0].hofs = -(mode.hs - 1);
+    page_tile_ctrl[0].vofs = -mode.vbp;
     page_vram[0] = vram_base;
 
-    page_tile_ctrl[1].hofs = -31;
-    page_tile_ctrl[1].vofs = (64 * 8) - 6;
+    page_tile_ctrl[1].hofs = -(mode.hs - 1);
+    page_tile_ctrl[1].vofs = (64 * 8) - mode.vbp;
     page_vram[1] = vram_base + (TILE_MAX_W * 64);
 
     gfx_pageflip();
-
-    return real_hz;
 }
 
 void gfx_pageflip()

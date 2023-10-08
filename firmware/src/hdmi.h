@@ -13,9 +13,16 @@ typedef struct
 	uint16_t vbp;
 
     float mhz;
-} HDMIMode;
+} VideoMode;
+
+static inline uint32_t video_mode_pixels(const VideoMode *m)
+{
+    return ( m->hact + m->hbp + m->hfp + m->hs ) * ( m->vact + m->vbp + m->vfp + m->vs );
+}
 
 void hdmi_set_mode(uint16_t width, uint16_t height, float hz);
+
+void crt_set_mode(const VideoMode *mode);
 
 
 #endif // HDMI_H

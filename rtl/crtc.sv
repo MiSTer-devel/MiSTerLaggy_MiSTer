@@ -16,7 +16,12 @@ module crtc(
 
     output vsync,
     output vblank,
-    output [11:0] vcnt
+    output [11:0] vcnt,
+
+	output [5:0] pll_addr,
+	output [31:0] pll_value,
+	output reg pll_write,
+	input      pll_busy
 );
 
 reg [15:0] ctrl[16];
@@ -34,9 +39,12 @@ wire [11:0] vfp = ctrl[7][11:0];
 wire [11:0] vs = ctrl[8][11:0];
 wire [11:0] vbp = ctrl[9][11:0];
 
+assign pll_addr = ctrl[12][5:0];
+assign pll_value = {ctrl[10], ctrl[11]};
 
-localparam HCNT_REG = 10;
-localparam VCNT_REG = 11;
+localparam PLL_IO_REG = 13;
+localparam HCNT_REG = 14;
+localparam VCNT_REG = 15;
 
 assign hcnt = ctrl[HCNT_REG][11:0];
 assign vcnt = ctrl[VCNT_REG][11:0];
@@ -60,7 +68,7 @@ assign hblank = hcnt >= hb_start || hcnt < hbp;
 assign hsync = hcnt >= hs_start && hcnt < hs_end;
 assign vblank = vcnt >= vb_start || vcnt < vbp;
 assign vsync = vcnt >= vs_start && vcnt < vs_end;
-assign dout = ctrl[address];
+assign dout = address == PLL_IO_REG ? {16{pll_busy}} : ctrl[address];
 
 always_ff @(posedge clk) begin
     if (reset) begin
@@ -68,8 +76,12 @@ always_ff @(posedge clk) begin
         ctrl[VCNT_REG] <= 16'd0;
     end
 
+    pll_write <= 0;
+
     if (wr[0]) ctrl[address][7:0] <= din[7:0];
     if (wr[1]) ctrl[address][15:8] <= din[15:8];
+
+    if (wr[0] && address == PLL_IO_REG) pll_write <= 1;
 
     hb_start <= hact + hbp;
     vb_start <= vact + vbp;

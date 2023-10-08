@@ -1,10 +1,35 @@
 #include <stdint.h>
 
 #include "hdmi.h"
+#include "clock.h"
+
+typedef volatile struct
+{
+    uint16_t ce_numer;
+    uint16_t ce_denom;
+
+    uint16_t hact;
+    uint16_t hfp;
+    uint16_t hs;
+    uint16_t hbp;
+    uint16_t vact;
+    uint16_t vfp;
+    uint16_t vs;
+    uint16_t vbp;
+
+    uint32_t pll_data;
+    uint16_t pll_address;
+    uint16_t pll_io;
+
+    uint16_t hcnt;
+    uint16_t vcnt;
+} CRTC;
+
+CRTC *crtc = (CRTC *)0x800000;
 
 #define NUM_HDMI_MODES 14
 
-HDMIMode hdmi_modes[NUM_HDMI_MODES] =
+VideoMode hdmi_modes[NUM_HDMI_MODES] =
 {
     { 1280, 110,  40, 220,  720,  5,  5, 20,  74.25 }, //1  1280x720@60
 	{ 1024,  24, 136, 160,  768,  3,  6, 29,  65,   }, //2  1024x768@60
@@ -163,13 +188,13 @@ static void setPLL(double Fout)
     vio_write_pll(7, k);
 }
 
-static const HDMIMode *hdmi_find_mode(uint16_t width, uint16_t height, float hz)
+static const VideoMode *hdmi_find_mode(uint16_t width, uint16_t height, float hz)
 {
     float min_diff = 999999999999;
     int min_index = -1;
     for( int i = 0; i < NUM_HDMI_MODES; i++ )
     {
-        const HDMIMode *mode = &hdmi_modes[i];
+        const VideoMode *mode = &hdmi_modes[i];
         if (mode->hact != width || mode->vact != height) continue;
 
         int32_t h = mode->hact + mode->hfp + mode->hs + mode->hbp;
@@ -196,7 +221,7 @@ static const HDMIMode *hdmi_find_mode(uint16_t width, uint16_t height, float hz)
 
 void hdmi_set_mode(uint16_t width, uint16_t height, float hz)
 {
-    const HDMIMode *mode = hdmi_find_mode(width, height, hz);
+    const VideoMode *mode = hdmi_find_mode(width, height, hz);
 
     if (mode == 0) return;
 
@@ -225,4 +250,75 @@ void hdmi_set_mode(uint16_t width, uint16_t height, float hz)
     setPLL(mhz);
 
     vio_cmd(VIO_SET_CFG, 1);
+}
+
+static void crtc_write_pll(uint16_t address, uint32_t data)
+{
+    while (crtc->pll_io != 0) {};
+
+    crtc->pll_data = data;
+    crtc->pll_address = address;
+    crtc->pll_io = 0xffff;
+}
+
+void crt_set_mode(const VideoMode *mode)
+{
+	double Fpix;
+	double fvco, ko;
+	uint32_t m, c;
+
+	//printf("Calculate PLL for %.4f MHz:\n", Fout);
+
+    float mhz = mode->mhz * 4;
+	if (!findPLLpar(mhz, &c, &m, &ko))
+	{
+		c = 1;
+		while ((mhz*c) < 400) c++;
+
+		fvco = mhz*c;
+		m = (uint32_t)(fvco / 50);
+		ko = ((fvco / 50) - m);
+
+		//Make sure K is in allowed range.
+		if (ko <= 0.05f)
+		{
+			ko = 0;
+		}
+		else if (ko >= 0.95f)
+		{
+			m++;
+			ko = 0;
+		}
+	}
+
+	uint32_t k = ko ? (uint32_t)(ko * 4294967296) : 1;
+
+	fvco = ko + m;
+	fvco *= 50.f;
+	Fpix = fvco / c;
+
+	//printf("Fvco=%f, C=%d, M=%d, K=%f(%u) -> Fpix=%f\n", fvco, c, m, ko, k, Fpix);
+
+    crtc_write_pll(0, 0);
+    crtc_write_pll(4, getPLLdiv(m));
+    crtc_write_pll(3, 0x10000);
+    crtc_write_pll(5, getPLLdiv(c));
+    crtc_write_pll(9, 2);
+    crtc_write_pll(8, 7);
+    crtc_write_pll(7, k);
+
+    crtc_write_pll(2, 0); // reconfigure
+
+    crtc->ce_numer = 1;
+    crtc->ce_denom = 4;
+
+    crtc->hact = mode->hact;
+    crtc->hfp = mode->hfp;
+    crtc->hs = mode->hs;
+    crtc->hbp = mode->hbp;
+
+    crtc->vact = mode->vact;
+    crtc->vfp = mode->vfp;
+    crtc->vs = mode->vs;
+    crtc->vbp = mode->vbp;
 }

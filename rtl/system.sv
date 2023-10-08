@@ -3,10 +3,9 @@ module system
 (
 	input   clk,
 	input   reset,
-	
-	input   pal,
-	input   scandouble,
 
+	input clk_50m,
+	
 	output  ce_pixel,
 
 	output  HBlank,
@@ -37,7 +36,12 @@ module system
 	input  [15:0] vio_cfg,
 
 	input         hdmi_vblank,
-	output reg    new_vmode
+	output reg    new_vmode,
+
+	output [5:0] pll_addr,
+	output [31:0] pll_value,
+	output pll_write,
+	input  pll_busy
 );
 
 reg phi1, phi2;
@@ -122,18 +126,35 @@ always_ff @(posedge clk) begin
 	end
 end
 
+always_ff @(posedge clk_50m) begin
+	reg [2:0] cnt = 0;
+
+	if (reset) begin
+		cnt <= 3'd0;
+		ticks <= 32'd0;
+	end else begin
+		cnt <= cnt + 3'd1;
+		if (cnt == 4) begin
+			cnt <= 3'd0;
+			ticks <= ticks + 32'd1;
+		end
+	end
+end
+
+
 always_ff @(posedge clk) begin
 	reg prev_strobe;
+	reg [31:0] ticks2;
+
 	if (reset) begin
-		ticks <= 32'd0;
 		hps_valid <= 0;
 		vio_en <= 0;
 		vio_strobe <= 0;
 		prev_strobe <= 0;
 		int_ctrl <= 16'd0;
 	end else begin
-		if (ticks_sel & ~cpu_rw) ticks_latch <= ticks;
-		ticks <= ticks + 32'd1;
+		ticks2 <= ticks;
+		if (ticks_sel & ~cpu_rw) ticks_latch <= ticks2;
 
 		if (user_sel & ~cpu_rw & ~cpu_ds_n[0]) user_out <= cpu_dout[6:0];
 		if (hps_valid_sel & ~cpu_rw & ~cpu_ds_n[0]) hps_valid <= cpu_dout[0];
@@ -292,7 +313,12 @@ crtc crtc(
 
     .vsync(VSync),
     .vblank(VBlank),
-    .vcnt(vcnt)
+    .vcnt(vcnt),
+
+	.pll_addr(pll_addr),
+	.pll_value(pll_value),
+	.pll_write(pll_write),
+	.pll_busy(pll_busy)
 );
 
 wire [7:0] color_idx;

@@ -266,12 +266,54 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1)) hps_io
 ///////////////////////   CLOCKS   ///////////////////////////////
 
 wire clk_sys;
+
+wire [63:0] reconfig_to_pll;
+wire [63:0] reconfig_from_pll;
+wire        cfg_waitrequest;
+reg         cfg_write;
+reg   [5:0] cfg_address;
+reg  [31:0] cfg_data;
+
 pll pll
 (
 	.refclk(CLK_50M),
 	.rst(0),
-	.outclk_0(clk_sys)
+	.outclk_0(clk_sys),
+	.reconfig_from_pll(reconfig_from_pll),
+	.reconfig_to_pll(reconfig_to_pll)
 );
+
+pll_cfg pll_cfg
+(
+	.mgmt_clk(CLK_50M),
+	.mgmt_reset(0),
+	.mgmt_waitrequest(cfg_waitrequest),
+	.mgmt_read(0),
+	.mgmt_readdata(),
+	.mgmt_write(cfg_write),
+	.mgmt_address(cfg_address),
+	.mgmt_writedata(cfg_data),
+	.reconfig_to_pll(reconfig_to_pll),
+	.reconfig_from_pll(reconfig_from_pll)
+);
+
+reg [5:0] pll_addr;
+reg [31:0] pll_value;
+reg pll_write_old = 0;
+reg pll_write = 0;
+reg pll_busy = 1;
+
+always_ff @(posedge CLK_50M) begin
+	cfg_write <= 0;
+	pll_write_old <= pll_write;
+	if (pll_write & ~pll_write_old) begin
+		cfg_write <= pll_write;
+		cfg_address <= pll_addr;
+		cfg_data <= pll_value;
+		pll_busy <= 1;
+	end
+	pll_busy <= cfg_waitrequest | pll_write;
+end
 
 wire reset = RESET | status[0] | buttons[1] | ioctl_download;
 
@@ -285,10 +327,9 @@ wire VSync;
 system system
 (
 	.clk(clk_sys),
+	.clk_50m(CLK_50M),
+
 	.reset(reset),
-	
-	.pal(status[2]),
-	.scandouble(forced_scandoubler),
 
 	.ce_pixel(CE_PIXEL),
 
@@ -321,7 +362,12 @@ system system
 
 	.hdmi_vblank(HDMI_VBL),
 
-	.new_vmode(new_vmode)
+	.new_vmode(new_vmode),
+
+	.pll_addr(pll_addr),
+	.pll_value(pll_value),
+	.pll_write(pll_write),
+	.pll_busy(pll_busy)
 );
 
 assign CLK_VIDEO = clk_sys;

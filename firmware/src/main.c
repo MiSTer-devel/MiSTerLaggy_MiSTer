@@ -8,25 +8,15 @@
 #include "input.h"
 #include "hdmi.h"
 #include "gfx.h"
-
-#define CLK_MHZ 24
-#define CLK_KHZ (CLK_MHZ * 1000)
-#define MS_TO_TICKS(ms) ((ms) * CLK_KHZ)
+#include "clock.h"
 
 #define RGB(r, g, b) ( ( ((r) & 0xf8) << 7 ) | ( ((g) & 0xf8) << 2 ) | ( ((b) & 0xf8) >> 3 ) )
 
-#define WAIT_CLEAR_TICKS MS_TO_TICKS(100)
-#define MIN_SAMPLE_TICKS MS_TO_TICKS(200)
-#define MAX_SAMPLE_TICKS MS_TO_TICKS(500)
-
-typedef volatile struct
-{
-    uint32_t value;
-    uint16_t latch;
-} Ticks;
+#define WAIT_CLEAR_TICKS CLOCK_MS_TO_TICKS(200)
+#define MIN_SAMPLE_TICKS CLOCK_MS_TO_TICKS(200)
+#define MAX_SAMPLE_TICKS CLOCK_MS_TO_TICKS(500)
 
 uint16_t *palette_ram = (uint16_t *)0x920000;
-Ticks *ticks = (Ticks *)0x200000;
 volatile uint16_t *user_io = (volatile uint16_t *)0x300000;
 uint16_t *int_ctrl = (uint16_t *)0x700000;
 
@@ -40,7 +30,7 @@ uint16_t *int_ctrl = (uint16_t *)0x700000;
 #define INT_INVERT 0x8
 
 
-volatile uint32_t int2_count = 0;
+volatile uint32_t vblank_int_count = 0;
 
 volatile uint16_t sample_seq = 0; 
 volatile uint16_t frame_seq = 0;
@@ -49,27 +39,24 @@ volatile uint16_t sensor_seq = 0;
 volatile uint32_t frame_ticks = 0;
 volatile uint32_t sensor_ticks = 0;
 
+volatile uint32_t prev_vblank_ticks = 0;
+volatile uint32_t frame_duration = 0;
 
-uint32_t read_ticks()
-{
-    disable_interrupts();
-    ticks->latch = 0xffff;
-    uint32_t res = ticks->value;
-    enable_interrupts();
-
-    return res;
-}
 
 __attribute__((interrupt)) void level2_handler()
 {
-    int2_count++;
+    uint32_t ticks = clock_get_ticks();
+    frame_duration = ticks - prev_vblank_ticks;
+    prev_vblank_ticks = ticks;
+
+    vblank_int_count++;
 }
 
 __attribute__((interrupt)) void level4_handler()
 {
     if (frame_seq != sample_seq)
     {
-        frame_ticks = read_ticks();
+        frame_ticks = clock_get_ticks();
         frame_seq = sample_seq;
     }
 }
@@ -78,7 +65,7 @@ __attribute__((interrupt)) void level6_handler()
 {
     if (sensor_seq != sample_seq)
     {
-        sensor_ticks = read_ticks();
+        sensor_ticks = clock_get_ticks();
         sensor_seq = sample_seq;
     }
 }
@@ -101,15 +88,19 @@ char video_mode_desc[32];
 
 static void draw_status()
 {
-    gfx_begin_region(status.x, status.y, STATUS_W, STATUS_H);
+    gfx_begin_region(status.x, status.y, STATUS_W, STATUS_H + 1);
     gfx_pen(0);
-    gfx_rect(0, 0, STATUS_W, STATUS_H);
+    gfx_rect(0, 0, STATUS_W, STATUS_H + 1);
 
     for( int i = 0; i < STATUS_H; i++ )
     {
         gfx_pen(status.colors[i]);
         gfx_text(status.lines[i]);
     }
+//    char foo[32];
+//    snprintf(foo, sizeof(foo), "%u", frame_duration);
+//    gfx_text(foo);
+
     gfx_end_region();
 }
 
@@ -233,8 +224,8 @@ static bool draw_menu(bool reset)
         if (gfx_menuitem_button("Apply Changes"))
         {
             *int_ctrl = INT2_CTRL(INT_SRC_VBLANK) | INT4_CTRL(INT_SRC_HDMI_VBLANK | INT_INVERT) | INT6_CTRL(INT_SRC_USERIO);
-            float real_hz = gfx_set_240p(hdmi_refresh_rates[refresh_idx]);
-            hdmi_set_mode(hdmi_resolutions[mode_idx].width, hdmi_resolutions[mode_idx].height, real_hz);
+            gfx_set_240p(hdmi_refresh_rates[refresh_idx]);
+            hdmi_set_mode(hdmi_resolutions[mode_idx].width, hdmi_resolutions[mode_idx].height, hdmi_refresh_rates[refresh_idx]);
             applied_mode_idx = mode_idx;
             applied_refresh_idx = refresh_idx;
             close_menu = true;
@@ -256,9 +247,9 @@ static bool draw_menu(bool reset)
 uint32_t vblank_count = 0;
 void wait_vblank()
 {
-    while (vblank_count == int2_count) {};
+    while (vblank_count == vblank_int_count) {};
 
-    vblank_count = int2_count;
+    vblank_count = vblank_int_count;
 }
 
 
@@ -299,13 +290,13 @@ uint32_t state_start_ticks;
 static void set_state(State s)
 {
     state = s;
-    state_start_ticks = read_ticks();
+    state_start_ticks = clock_get_ticks();
 }
 
 int ticks_to_ms_str(uint32_t ticks, char *str, int len)
 {
-    uint32_t ms = ticks / CLK_KHZ;
-    uint32_t us = (ticks / CLK_MHZ ) % 1000;
+    uint32_t ms, us;
+    clock_ticks_to_ms_us(ticks, &ms, &us);
     return snprintf(str, len, "%u.%u", ms, us);
 }
 
@@ -375,7 +366,7 @@ typedef enum { MODE_SAMPLING, MODE_MENU } MainMode;
 
 void do_sampling()
 {
-    uint32_t cur_ticks = read_ticks();
+    uint32_t cur_ticks = clock_get_ticks();
     uint32_t state_ticks = cur_ticks - state_start_ticks;
 
     switch (state)
@@ -489,7 +480,7 @@ int main(int argc, char *argv[])
     *int_ctrl = INT2_CTRL(INT_SRC_VBLANK) | INT4_CTRL(INT_SRC_VBLANK | INT_INVERT) | INT6_CTRL(INT_SRC_USERIO);
 
     memset(&status, 0, sizeof(status));
-    gfx_set_240p(60.0);
+    gfx_set_240p(60);
 
     enable_interrupts();
 
