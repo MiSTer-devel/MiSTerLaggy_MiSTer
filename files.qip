@@ -1,5 +1,5 @@
-set_global_assignment -name SDC_FILE mrlaggy.sdc
-set_global_assignment -name SYSTEMVERILOG_FILE mrlaggy.sv
+set_global_assignment -name SDC_FILE MiSTerLaggy.sdc
+set_global_assignment -name SYSTEMVERILOG_FILE MiSTerLaggy.sv
 
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/system.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/hps_ext.sv
