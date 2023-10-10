@@ -2,7 +2,7 @@ CC = m68k-elf-gcc
 OBJCOPY = m68k-elf-objcopy
 
 TARGET = finalb_test
-SRCS = init.c main.c input.c hdmi.c gfx.c clock.c interrupts_default.c printf/printf.c
+SRCS = init.c main.c input.c hdmi.c gfx.c clock.c debug.c interrupts_default.c printf/printf.c
 
 BUILD_DIR = build
 

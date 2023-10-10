@@ -9,6 +9,7 @@
 #include "hdmi.h"
 #include "gfx.h"
 #include "clock.h"
+#include "debug.h"
 
 #define RGB(r, g, b) ( ( ((r) & 0xf8) << 7 ) | ( ((g) & 0xf8) << 2 ) | ( ((b) & 0xf8) >> 3 ) )
 
@@ -39,16 +40,10 @@ volatile uint16_t sensor_seq = 0;
 volatile uint32_t frame_ticks = 0;
 volatile uint32_t sensor_ticks = 0;
 
-volatile uint32_t prev_vblank_ticks = 0;
-volatile uint32_t frame_duration = 0;
-
 
 __attribute__((interrupt)) void level2_handler()
 {
-    uint32_t ticks = clock_get_ticks();
-    frame_duration = ticks - prev_vblank_ticks;
-    prev_vblank_ticks = ticks;
-
+    DEBUG_FRAME_MARKER(vblank_start);
     vblank_int_count++;
 }
 
@@ -59,6 +54,8 @@ __attribute__((interrupt)) void level4_handler()
         frame_ticks = clock_get_ticks();
         frame_seq = sample_seq;
     }
+
+    DEBUG_FRAME_MARKER(vblank_end);
 }
 
 __attribute__((interrupt)) void level6_handler()
@@ -89,8 +86,6 @@ char video_mode_desc[32];
 static void draw_status()
 {
     gfx_begin_region(status.x, status.y, STATUS_W, STATUS_H + 1);
-    gfx_pen(0);
-    gfx_rect(0, 0, STATUS_W, STATUS_H + 1);
 
     for( int i = 0; i < STATUS_H; i++ )
     {
@@ -252,29 +247,6 @@ void wait_vblank()
     vblank_count = vblank_int_count;
 }
 
-
-static void init_sampling_ui()
-{
-    for( int i = 0; i < 2; i++ )
-    {
-        gfx_pageflip();
-        gfx_clear();
-        gfx_pen(0x80);
-        gfx_rect(0, 0, 11, 4);
-        gfx_rect(0, 13, 11, 4);
-        gfx_rect(0, 26, 11, 4);
-
-        gfx_begin_region(14, 24, 20, 2);
-        gfx_pen(TEXT_AQUA);
-        gfx_text("HDMI: "); gfx_sameline(); gfx_text(video_mode_desc);
-        gfx_end_region();
-    }
-
-    status.x = 14;
-    status.y = 10;
-}
-
-
 typedef enum
 {
     ST_CLEAR = 0,
@@ -387,6 +359,7 @@ void do_sampling()
             set_state(ST_WAIT_SAMPLE);
             palette_ram[0x80] = 0xffff;
             sample_seq++;
+            DEBUG_FRAME_MARKER(sample_start);
             break;
 
         case ST_WAIT_SAMPLE:
@@ -412,6 +385,18 @@ void do_sampling()
             set_state(ST_CLEAR);
             break;
     }
+
+
+    gfx_clear();
+    gfx_pen(0x80);
+    gfx_rect(0, 0, 11, 4);
+    gfx_rect(0, 13, 11, 4);
+    gfx_rect(0, 26, 11, 4);
+
+    gfx_begin_region(14, 24, 20, 2);
+    gfx_pen(TEXT_AQUA);
+    gfx_text("HDMI: "); gfx_sameline(); gfx_text(video_mode_desc);
+    gfx_end_region();
 
     draw_status();
 
@@ -480,6 +465,9 @@ int main(int argc, char *argv[])
     *int_ctrl = INT2_CTRL(INT_SRC_VBLANK) | INT4_CTRL(INT_SRC_VBLANK | INT_INVERT) | INT6_CTRL(INT_SRC_USERIO);
 
     memset(&status, 0, sizeof(status));
+    status.x = 14;
+    status.y = 10;
+
     gfx_set_240p(60);
 
     enable_interrupts();
@@ -494,19 +482,12 @@ int main(int argc, char *argv[])
 
         if (mode == MODE_SAMPLING)
         {
-            if (new_mode)
+            new_mode = false;
+            do_sampling();
+            if (input_pressed() & INPUT_MENU)
             {
-                init_sampling_ui();
-                new_mode = false;
-            }
-            else
-            {
-                do_sampling();
-                if (input_pressed() & INPUT_MENU)
-                {
-                    mode = MODE_MENU;
-                    new_mode = true;
-                }
+                mode = MODE_MENU;
+                new_mode = true;
             }
         }
         else if (mode == MODE_MENU)
@@ -522,6 +503,10 @@ int main(int argc, char *argv[])
             }
         }
 
+        DEBUG_DRAW();
+
+        DEBUG_FRAME_MARKER(frontend_end);
+        DEBUG_END_FRAME();
     }
 
     return 0;

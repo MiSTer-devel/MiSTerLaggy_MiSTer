@@ -44,8 +44,10 @@ void gfx_pen(int color256);
 void gfx_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h);
 void gfx_frame(uint16_t x, uint16_t y, uint16_t w, uint16_t h);
 
-#define gfx_text(x) gfx_text_aligned(x, ALIGN_LEFT);
-void gfx_text_aligned(const char *str, TextAlign align);
+#define gfx_text(x) gfx_text_aligned(ALIGN_LEFT, x);
+#define gfx_textf(x, ...) gfx_textf_aligned(ALIGN_LEFT, x, __VA_ARGS__);
+void gfx_textf_aligned(TextAlign align, const char *fmt, ...);
+void gfx_text_aligned(TextAlign align, const char *str);
 void gfx_sameline();
 void gfx_newline(int n);
 

@@ -11,6 +11,7 @@
 
 #define CLOCK_MS_TO_TICKS(ms) ((ms) * CLOCK_REF_KHZ)
 #define CLOCK_TICKS_TO_MS(ticks) ((ticks) / CLOCK_REF_KHZ)
+#define CLOCK_TICKS_TO_US(ticks) ((ticks) / CLOCK_REF_MHZ)
 
 void clock_ticks_to_ms_us(uint32_t ticks, uint32_t *ms, uint32_t *us);
 

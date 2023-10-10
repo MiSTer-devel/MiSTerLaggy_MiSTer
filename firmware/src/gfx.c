@@ -1,9 +1,11 @@
 #include <stddef.h>
+#include <stdarg.h>
 
 #include "gfx.h"
 #include "input.h"
 #include "util.h"
 #include "hdmi.h"
+#include "printf/printf.h"
 
 #define TILE_MAX_W 128
 
@@ -21,8 +23,21 @@ typedef struct
     uint16_t vofs;
 } TilemapCtrl;
 
+typedef struct
+{
+    uint16_t value;
+    uint16_t span;
+    uint16_t skip;
+    uint16_t repeat;
+
+    uint16_t addr;
+    uint16_t pad0;
+    uint16_t pad1;
+    volatile uint16_t submit;
+} Blitter;
 
 TilemapCtrl *tile_ctrl = (TilemapCtrl *)0x910000;
+Blitter *blitter = (Blitter *)0x930000;
 
 TilemapCtrl page_tile_ctrl[2];
 uint16_t *page_vram[2];
@@ -97,10 +112,15 @@ void gfx_pageflip()
 
 void gfx_clear()
 {
-    gfx_push();
-    gfx_pen(0);
-    gfx_rect(0, 0, ctx->rw, ctx->rh);
-    gfx_pop();
+    uint16_t base_addr = (((uint32_t)vram) >> 1) & 0xffff;
+    uint16_t ofs = ( ctx->ry * TILE_MAX_W ) + ctx->rx;
+    const uint16_t skip = TILE_MAX_W - (ctx->rw - 1);
+    blitter->addr = base_addr + ofs;
+    blitter->value = 0x0020;
+    blitter->span = ctx->rw - 1;
+    blitter->repeat = ctx->rh - 1;
+    blitter->skip = TILE_MAX_W - (ctx->rw - 1);
+    blitter->submit = 1;
 }
 
 void gfx_push()
@@ -164,62 +184,12 @@ void gfx_begin_menu(const char *name, uint16_t w, uint16_t h, MenuContext *menuc
     if (menuctx->index < 0) menuctx->index = menuctx->count - 1;
     menuctx->count = 0;
 
-    gfx_text_aligned(name, ALIGN_CENTER);
+    gfx_text_aligned(ALIGN_CENTER, name);
 }
 
 void gfx_end_menu()
 {
     gfx_end_region();
-}
-
-bool gfx_menuitem_select_deferred(const char *label, const char **options, int num_options, int *option_index)
-{
-    bool changed = false;
-    MenuContext *menuctx = ctx->menuctx;
-    if( menuctx == NULL ) return false;
-
-    bool selected = menuctx->count == menuctx->index;
-    if (selected)
-    {
-        uint16_t pressed = input_pressed();
-        if (menuctx->tmp_option_idx == -1) menuctx->tmp_option_idx = *option_index;
-
-        if (pressed & INPUT_RIGHT)
-        {
-            menuctx->tmp_option_idx++;
-        }
-        if (pressed & INPUT_LEFT)
-        {
-            menuctx->tmp_option_idx--;
-        }
-        if (menuctx->tmp_option_idx < 0) menuctx->tmp_option_idx = num_options - 1;
-        if (menuctx->tmp_option_idx >= num_options) menuctx->tmp_option_idx = 0;
-
-        if (pressed & INPUT_OK)
-        {
-            *option_index = menuctx->tmp_option_idx;
-            changed = true;
-        }
-    }
-
-    gfx_newline(1);
-    if (selected)
-    {
-        gfx_pen(TEXT_GRAY | TEXT_INVERT);
-        gfx_text_aligned(label, ALIGN_LEFT);
-        gfx_pen(TEXT_GRAY | TEXT_INVERT);
-        gfx_text_aligned(options[menuctx->tmp_option_idx], ALIGN_RIGHT);
-    }
-    else
-    {
-        gfx_pen(TEXT_GRAY);
-        gfx_text_aligned(label, ALIGN_LEFT);
-        gfx_pen(TEXT_GRAY);
-        gfx_text_aligned(options[*option_index], ALIGN_RIGHT);
-    }
-    
-    menuctx->count++;
-    return changed;
 }
 
 bool gfx_menuitem_select(const char *label, const char **options, int num_options, int *option_index)
@@ -303,12 +273,12 @@ bool gfx_menuitem_button(const char *label)
     if (selected)
     {
         gfx_pen(TEXT_GRAY | TEXT_INVERT);
-        gfx_text_aligned(label, ALIGN_CENTER);
+        gfx_text_aligned(ALIGN_CENTER, label);
     }
     else
     {
         gfx_pen(TEXT_GRAY);
-        gfx_text_aligned(label, ALIGN_CENTER);
+        gfx_text_aligned(ALIGN_CENTER, label);
     }
     
     menuctx->count++;
@@ -322,14 +292,14 @@ void gfx_pen(int color)
 
 void gfx_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
 {
-    int ofs = ( (ctx->ry + y) * TILE_MAX_W ) + x + ctx->rx;
-    uint16_t tile = ctx->pen << 8 | 0x20;
-
-    for( int i = 0; i < h; i++ )
-    {
-        memsetw(&vram[ofs], tile, w);
-        ofs += TILE_MAX_W;
-    }
+    uint16_t base_addr = (((uint32_t)vram) >> 1) & 0xffff;
+    uint16_t ofs = ( (ctx->ry + y) * TILE_MAX_W ) + x + ctx->rx;
+    blitter->addr = base_addr + ofs;
+    blitter->value = ctx->pen << 8 | 0x20;
+    blitter->span = w - 1;
+    blitter->repeat = h - 1;
+    blitter->skip = TILE_MAX_W - (w - 1);
+    blitter->submit = 1;
 }
 
 void gfx_frame(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
@@ -356,7 +326,7 @@ void gfx_frame(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
         vram[ofs + c] = color | CHR_HORIZ;
 }
 
-void gfx_text_aligned(const char *str, TextAlign align)
+void gfx_text_aligned(TextAlign align, const char *str)
 {
     uint16_t x = 0;
     int len = strlen(str);
@@ -390,6 +360,18 @@ void gfx_text_aligned(const char *str, TextAlign align)
 
     ctx->y++;
     ctx->prevx = x;
+}
+
+void gfx_textf_aligned(TextAlign align, const char *fmt, ...)
+{
+    char tmp[40];
+    va_list args;
+   
+    va_start(args, fmt);
+    vsnprintf(tmp, sizeof(tmp), fmt, args);
+    va_end(args);
+
+    gfx_text_aligned(align, tmp);
 }
 
 void gfx_sameline()

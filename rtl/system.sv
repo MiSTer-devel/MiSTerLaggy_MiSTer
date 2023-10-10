@@ -70,6 +70,7 @@ wire crtc_sel = cpu_addr[23:16] == 8'h80;
 wire tilemap_ram_sel = cpu_addr[23:16] == 8'h90;
 wire tilemap_reg_sel = cpu_addr[23:16] == 8'h91;
 wire tilemap_sel = tilemap_ram_sel | tilemap_reg_sel;
+wire blitter_sel = cpu_addr[23:16] == 8'h93;
 wire pal_sel = cpu_addr[23:16] == 8'h92;
 wire vio_sel = cpu_addr[23:16] == 8'h60;
 wire int_sel = cpu_addr[23:16] == 8'h70;
@@ -86,6 +87,7 @@ wire [15:0] cpu_din = ram_sel ? ram_dout :
 					  pad_sel ? { 1'd0, gamepad } :
 					  vio_sel ? vio_dout :
 					  int_sel ? int_ctrl :
+					  blitter_sel ? blitter_dout :
 					  rom_dout;
 
 wire [15:0] cpu_dout;
@@ -96,6 +98,7 @@ wire [15:0] ram_dout;
 wire [15:0] tilemap_dout;
 wire [15:0] crtc_dout;
 wire [15:0] pal_dout;
+wire [15:0] blitter_dout;
 
 reg hps_valid = 0;
 
@@ -228,7 +231,7 @@ fx68k m68000(
 	.BGn(),
 	.oRESETn(),
 	.oHALTEDn(),
-	.DTACKn(cpu_dtack_n),
+	.DTACKn(cpu_dtack_n | blit_active),
 	.VPAn(cpu_vpa_n),
 	.BERRn(1),
 	.BRn(1),
@@ -321,11 +324,33 @@ crtc crtc(
 	.pll_busy(pll_busy)
 );
 
+wire blit_active, blit_wr;
+wire [15:0] blit_addr;
+wire [15:0] blit_dout;
+
+blitter blitter(
+    .clk(clk),
+    .reset(reset),
+
+    .blit_active(blit_active),
+    .blit_wr(blit_wr),
+    .blit_addr(blit_addr),
+    .blit_dout(blit_dout),
+
+    .wr((blitter_sel & ~cpu_rw) ? ~cpu_ds_n : 2'b00),
+
+    .address(cpu_addr[16:1]),
+    .din(cpu_dout),
+    .dout(blitter_dout)
+);
+
 wire [7:0] color_idx;
 wire [15:0] color_rgb;
 assign r = { color_rgb[14:10], color_rgb[14:12] };
 assign g = { color_rgb[9:5], color_rgb[9:7] };
 assign b = { color_rgb[4:0], color_rgb[4:2] };
+
+wire [1:0] tilemap_wr = blit_active ? (blit_wr ? 2'b11 : 2'b00) : ((tilemap_sel & ~cpu_rw) ? ~cpu_ds_n : 2'b00);
 
 tilemap tilemap(
     .clk(clk),
@@ -333,13 +358,13 @@ tilemap tilemap(
 
     .ce_pixel(ce_pixel),
 
-    .wr((tilemap_sel & ~cpu_rw) ? ~cpu_ds_n : 2'b00),
+    .wr(tilemap_wr),
 
-	.cs_ram(tilemap_ram_sel),
-	.cs_reg(tilemap_reg_sel),
+	.cs_ram(blit_active ? 1 : tilemap_ram_sel),
+	.cs_reg(blit_active ? 0 : tilemap_reg_sel),
 
-    .address(cpu_addr[16:1]),
-    .din(cpu_dout),
+    .address(blit_active ? blit_addr : cpu_addr[16:1]),
+    .din(blit_active ? blit_dout : cpu_dout),
     .dout(tilemap_dout),
 
     .hcnt(hcnt),
