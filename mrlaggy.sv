@@ -204,18 +204,12 @@ assign BUTTONS = 0;
 
 //////////////////////////////////////////////////////////////////
 
-wire [1:0] ar = status[122:121];
-
-assign VIDEO_ARX = (!ar) ? 12'd4 : (ar - 1'd1);
-assign VIDEO_ARY = (!ar) ? 12'd3 : 12'd0;
+assign VIDEO_ARX = 12'd4;
+assign VIDEO_ARY = 12'd3;
 
 `include "build_id.v" 
 localparam CONF_STR = {
-	"MrLaggy;;",
-	"-;",
-	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
-	"O[2],TV Mode,NTSC,PAL;",
-	"-;",
+	"MiSTerLaggy;;",
 	"FC0,BIN,Load CPU ROM;",
 	"-;",
 	"T[0],Reset;",
@@ -316,8 +310,6 @@ always_ff @(posedge CLK_50M) begin
 end
 
 wire reset = RESET | status[0] | buttons[1] | ioctl_download;
-
-wire [1:0] col = status[4:3];
 
 wire HBlank;
 wire HSync;
