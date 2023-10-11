@@ -11,6 +11,8 @@
 #include "clock.h"
 #include "debug.h"
 
+#define FIRMWARE_VERSION 0x0100
+
 #define RGB(r, g, b) ( ( ((r) & 0xf8) << 7 ) | ( ((g) & 0xf8) << 2 ) | ( ((b) & 0xf8) >> 3 ) )
 
 #define WAIT_CLEAR_TICKS CLOCK_MS_TO_TICKS(200)
@@ -20,6 +22,8 @@
 uint16_t *palette_ram = (uint16_t *)0x920000;
 volatile uint16_t *user_io = (volatile uint16_t *)0x300000;
 uint16_t *int_ctrl = (uint16_t *)0x700000;
+uint32_t *core_version = (uint32_t *)0xf00000;
+
 
 #define INT2_CTRL(x) (((x) & 0xf) << 0)
 #define INT4_CTRL(x) (((x) & 0xf) << 4)
@@ -85,18 +89,15 @@ char video_mode_desc[32];
 
 static void draw_status()
 {
-    gfx_begin_region(status.x, status.y, STATUS_W, STATUS_H + 1);
+    gfx_begin_window(ALIGN_NONE, status.x, status.y, STATUS_W, STATUS_H + 1, 0);
 
     for( int i = 0; i < STATUS_H; i++ )
     {
         gfx_pen(status.colors[i]);
         gfx_text(status.lines[i]);
     }
-//    char foo[32];
-//    snprintf(foo, sizeof(foo), "%u", frame_duration);
-//    gfx_text(foo);
 
-    gfx_end_region();
+    gfx_end_window();
 }
 
 typedef struct
@@ -334,7 +335,7 @@ void update_sample_status()
     snprintf(status.lines[3], STATUS_W, "Max: %s ms", ms_str2);
 }
 
-typedef enum { MODE_SAMPLING, MODE_MENU } MainMode;
+typedef enum { MODE_NO_SENSOR, MODE_SAMPLING, MODE_MENU } MainMode;
 
 void do_sampling()
 {
@@ -393,10 +394,12 @@ void do_sampling()
     gfx_rect(0, 13, 11, 4);
     gfx_rect(0, 26, 11, 4);
 
-    gfx_begin_region(14, 24, 20, 2);
-    gfx_pen(TEXT_AQUA);
-    gfx_text("HDMI: "); gfx_sameline(); gfx_text(video_mode_desc);
-    gfx_end_region();
+    gfx_begin_window(ALIGN_NONE, 14, 24, 20, 2, 0);
+    gfx_pen(TEXT_BLUE);
+    gfx_textf("Mode: %s", video_mode_desc);
+    gfx_pen(TEXT_DARK_BLUE);
+    gfx_text("Press START for menu.");
+    gfx_end_window();
 
     draw_status();
 
@@ -419,25 +422,47 @@ void do_sampling()
     sample_status = NO_SAMPLE;
 }
 
-// https://lospec.com/palette-list/endesga-16
+void draw_no_sensor()
+{
+    gfx_clear();
+    gfx_pen(TEXT_RED);
+    gfx_begin_window(ALIGN_CENTER | ALIGN_MIDDLE, 0, 0, 34, 6, 1);
+
+    gfx_text_aligned(ALIGN_CENTER, "No sensor detected!");
+    gfx_newline(1);
+    gfx_pen(TEXT_ORANGE);
+    gfx_text_aligned(ALIGN_LEFT, "Connect your MiSTer Laggy sensor");
+    gfx_text_aligned(ALIGN_LEFT, "to the User Port.");
+    
+    gfx_end_window();
+}
+
+void draw_version()
+{
+    gfx_pen(TEXT_DARK);
+    gfx_begin_window(ALIGN_BOTTOM | ALIGN_RIGHT, 0, 2, 26, 1, 0);
+    gfx_textf_aligned(ALIGN_LEFT, "MiSTer Laggy %u.%u/%06u", (FIRMWARE_VERSION >> 8) & 0xff, FIRMWARE_VERSION & 0xff, *core_version);
+    gfx_end_window();
+}
+
 uint16_t base_palette[16] =
 {
-    RGB(0xe4, 0xa6, 0x72),
-    RGB(0xb8, 0x6f, 0x50),
-    RGB(0x74, 0x3f, 0x39),
     RGB(0x3f, 0x28, 0x32),
-    RGB(0x9e, 0x28, 0x35),
-    RGB(0xe5, 0x3b, 0x44),
-    RGB(0xfb, 0x92, 0x2b),
-    RGB(0xff, 0xe7, 0x62),
-    RGB(0x63, 0xc6, 0x4d),
-    RGB(0x32, 0x73, 0x45),
-    RGB(0x19, 0x3d, 0x3f),
-    RGB(0x4f, 0x67, 0x81),
-    RGB(0xaf, 0xbf, 0xd2),
-    RGB(0xff, 0xff, 0xff),
-    RGB(0x2c, 0xe8, 0xf4),
-    RGB(0x04, 0x84, 0xd1)
+    RGB(0x68, 0x60, 0x5c),
+    RGB(0xb0, 0xb0, 0xb8),
+    RGB(0xfc, 0xfc, 0xfc),
+    RGB(0x1c, 0x38, 0xac),
+    RGB(0x70, 0x70, 0xfc),
+    RGB(0xa8, 0x28, 0x14),
+    RGB(0xfc, 0x48, 0x48),
+    RGB(0x20, 0x88, 0x00),
+    RGB(0x70, 0xf8, 0x28),
+    RGB(0xb8, 0x2c, 0xd0),
+    RGB(0xfc, 0x74, 0xec),
+    RGB(0xac, 0x58, 0x1c),
+    RGB(0xf8, 0xa8, 0x50),
+    RGB(0x3c, 0xd4, 0xe4),
+    RGB(0xf8, 0xec, 0x20)
 };
 
 void set_palette()
@@ -489,6 +514,12 @@ int main(int argc, char *argv[])
                 mode = MODE_MENU;
                 new_mode = true;
             }
+
+            if (*user_io & 0x0001)
+            {
+                mode = MODE_NO_SENSOR;
+                new_mode = true;
+            }
         }
         else if (mode == MODE_MENU)
         {
@@ -502,6 +533,17 @@ int main(int argc, char *argv[])
                 new_mode = false;
             }
         }
+        else if (mode == MODE_NO_SENSOR)
+        {
+            if (!(*user_io & 0x0001))
+            {
+                mode = MODE_SAMPLING;
+                new_mode = true;
+            }
+            draw_no_sensor();
+        }
+
+        draw_version();
 
         DEBUG_DRAW();
 

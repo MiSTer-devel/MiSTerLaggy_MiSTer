@@ -1,3 +1,5 @@
+#if defined(ML_DEBUG)
+
 #include <stddef.h>
 
 #include "debug.h"
@@ -29,13 +31,14 @@ void debug_end_frame()
 
 void debug_draw()
 {
-    gfx_begin_region(14, 26, 26, 2);
-    gfx_pen(TEXT_DARK_GREEN);
-    gfx_textf("%u %u %u %u", CLOCK_TICKS_TO_US(sample_start),
+    gfx_begin_window(ALIGN_TOP | ALIGN_RIGHT, 2, 1, 24, 2, 0);
+    gfx_pen(TEXT_DARK);
+    gfx_textf("%5u %5u %5u %5u", CLOCK_TICKS_TO_US(sample_start),
                             CLOCK_TICKS_TO_US(vblank_end),
                             CLOCK_TICKS_TO_US(frontend_end),
                             CLOCK_TICKS_TO_US(frame_total));
-    gfx_end_region();
+    gfx_end_window();
 }
 
+#endif // ML_DEBUG
 

@@ -27,8 +27,6 @@ module system
     input [26:0] ioctl_addr,
     input [15:0] ioctl_dout,
 
-	inout [35:0] EXT_BUS,
-
 	output reg    vio_en,
 	output reg    vio_strobe,
 	input  [15:0] vio_dout,
@@ -43,6 +41,14 @@ module system
 	output pll_write,
 	input  pll_busy
 );
+
+function [31:0] build_date_int();
+    begin
+		string build_date = `BUILD_DATE;
+		build_date_int = build_date.atoi();
+    end
+endfunction
+
 
 reg phi1, phi2;
 reg [31:0] ticks, ticks_latch;
@@ -74,8 +80,11 @@ wire blitter_sel = cpu_addr[23:16] == 8'h93;
 wire pal_sel = cpu_addr[23:16] == 8'h92;
 wire vio_sel = cpu_addr[23:16] == 8'h60;
 wire int_sel = cpu_addr[23:16] == 8'h70;
+wire ver_sel = cpu_addr[23:16] == 8'hf0;
 
 wire a1 = cpu_addr[1];
+
+wire [31:0] BDI = build_date_int();
 
 wire [15:0] cpu_din = ram_sel ? ram_dout :
 					  crtc_sel ? crtc_dout :
@@ -88,6 +97,8 @@ wire [15:0] cpu_din = ram_sel ? ram_dout :
 					  vio_sel ? vio_dout :
 					  int_sel ? int_ctrl :
 					  blitter_sel ? blitter_dout :
+					  (ver_sel & a1) ? BDI[15:0] :
+					  (ver_sel & ~a1) ? BDI[31:16] : 
 					  rom_dout;
 
 wire [15:0] cpu_dout;
@@ -371,15 +382,6 @@ tilemap tilemap(
     .vcnt(vcnt),
 
     .color_out(color_idx)
-);
-
-hps_ext hps_ext(
-	.clk_sys(clk),
-	.EXT_BUS(EXT_BUS),
-	.valid(hps_valid),
-	.wr((hps_sel & ~cpu_rw) ? ~cpu_ds_n : 2'b00),
-	.din(cpu_dout),
-	.addr(cpu_addr[7:1])
 );
 
 endmodule

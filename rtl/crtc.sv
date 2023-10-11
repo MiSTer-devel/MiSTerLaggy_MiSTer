@@ -70,18 +70,22 @@ assign vblank = vcnt >= vb_start || vcnt < vbp;
 assign vsync = vcnt >= vs_start && vcnt < vs_end;
 assign dout = address == PLL_IO_REG ? {16{pll_busy}} : ctrl[address];
 
+wire pll_io_req = wr[0] && address == PLL_IO_REG;
+
 always_ff @(posedge clk) begin
+    reg pll_io_req_prev;
+
     if (reset) begin
         ctrl[HCNT_REG] <= 16'd0;
         ctrl[VCNT_REG] <= 16'd0;
     end
 
-    pll_write <= 0;
-
     if (wr[0]) ctrl[address][7:0] <= din[7:0];
     if (wr[1]) ctrl[address][15:8] <= din[15:8];
 
-    if (wr[0] && address == PLL_IO_REG) pll_write <= 1;
+    pll_io_req_prev <= pll_io_req;
+    pll_write <= pll_io_req & ~pll_io_req_prev;
+
 
     hb_start <= hact + hbp;
     vb_start <= vact + vbp;

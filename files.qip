@@ -2,7 +2,6 @@ set_global_assignment -name SDC_FILE MiSTerLaggy.sdc
 set_global_assignment -name SYSTEMVERILOG_FILE MiSTerLaggy.sv
 
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/system.sv
-set_global_assignment -name SYSTEMVERILOG_FILE rtl/hps_ext.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/dpramv.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/crtc.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/tilemap.sv
@@ -10,3 +9,5 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/blitter.sv
 set_global_assignment -name VERILOG_FILE       rtl/jtframe_frac_cen.v
 
 set_global_assignment -name QIP_FILE rtl/fx68k.qip
+set_global_assignment -name QIP_FILE rtl/pll_fifo.qip
+

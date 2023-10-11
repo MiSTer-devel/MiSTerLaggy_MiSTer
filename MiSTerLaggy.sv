@@ -227,14 +227,12 @@ wire  [31:0] gamepad;
 wire ioctl_download, ioctl_wr;
 wire [15:0] ioctl_index, ioctl_dout;
 wire [26:0] ioctl_addr;
-wire [35:0] EXT_BUS;
 wire new_vmode;
 
 hps_io #(.CONF_STR(CONF_STR), .WIDE(1)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
-	.EXT_BUS(EXT_BUS),
 	.gamma_bus(),
 
 	.forced_scandoubler(forced_scandoubler),
@@ -291,22 +289,38 @@ pll_cfg pll_cfg
 	.reconfig_from_pll(reconfig_from_pll)
 );
 
-reg [5:0] pll_addr;
-reg [31:0] pll_value;
-reg pll_write_old = 0;
-reg pll_write = 0;
-reg pll_busy = 1;
+wire [5:0] pll_addr;
+wire [31:0] pll_value;
+wire pll_busy;
+wire pll_write;
+
+reg pll_fifo_rdack = 0;
+wire [5:0] pll_cfg_addr;
+wire [31:0] pll_cfg_value;
+wire pll_fifo_empty;
+
+pll_fifo pll_fifo(
+	.wrclk(clk_sys),
+	.wrreq(pll_write),
+	.wrfull(pll_busy),
+	.data({2'b00, pll_addr, pll_value}),
+
+	.rdclk(CLK_50M),
+	.rdreq(pll_fifo_rdack),
+	.q({pll_cfg_addr, pll_cfg_value}),
+	.rdempty(pll_fifo_empty)
+);
 
 always_ff @(posedge CLK_50M) begin
 	cfg_write <= 0;
-	pll_write_old <= pll_write;
-	if (pll_write & ~pll_write_old) begin
-		cfg_write <= pll_write;
-		cfg_address <= pll_addr;
-		cfg_data <= pll_value;
-		pll_busy <= 1;
+	pll_fifo_rdack <= 0;
+
+	if (~cfg_waitrequest & ~pll_fifo_empty) begin
+		cfg_write <= 1;
+		cfg_address <= pll_cfg_addr;
+		cfg_data <= pll_cfg_value;
+		pll_fifo_rdack <= 1;
 	end
-	pll_busy <= cfg_waitrequest | pll_write;
 end
 
 wire reset = RESET | status[0] | buttons[1] | ioctl_download;
@@ -343,8 +357,6 @@ system system
 	.ioctl_index(ioctl_index),
 	.ioctl_addr(ioctl_addr),
 	.ioctl_dout(ioctl_dout),
-
-	.EXT_BUS(EXT_BUS),
 
 	.vio_en(VIO_EN),
 	.vio_strobe(VIO_STROBE),

@@ -1,8 +1,6 @@
 #if !defined(DEBUG_H)
 #define DEBUG_H 1
 
-#define ML_DEBUG 1
-
 #include <stdint.h>
 #include "clock.h"
 

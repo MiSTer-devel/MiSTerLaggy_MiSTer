@@ -143,16 +143,53 @@ void gfx_pop()
     if (context_idx < NUM_CTX) ctx = &contexts[context_idx];
 }
 
-void gfx_begin_region(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
+static void gfx_align_box(Align align, int16_t xadj, int16_t yadj, uint16_t w, uint16_t h, int16_t *x, int16_t *y)
 {
-    gfx_push();
-    ctx->rx += x;
-    ctx->ry += y;
-    ctx->rw = w;
-    ctx->rh = h;
+    if( align & ALIGN_CENTER )
+    {
+        *x = ((ctx->rw - w) >> 1) + xadj;
+    }
+    else if (align & ALIGN_RIGHT)
+    {
+        *x = ((ctx->rw - w) - xadj);
+    }
+    else
+    {
+        *x = xadj;
+    }
+
+    if( align & ALIGN_MIDDLE )
+    {
+        *y = ((ctx->rh - h) >> 1) + yadj;
+    }
+    else if (align & ALIGN_BOTTOM)
+    {
+        *y = ((ctx->rh - h) - yadj);
+    }
+    else
+    {
+        *y = yadj;
+    }
 }
 
-void gfx_end_region()
+void gfx_begin_window(Align align, int16_t x, int16_t y, uint16_t w, uint16_t h, int16_t frame)
+{
+    gfx_push();
+    gfx_align_box(align, x, y, w, h, &ctx->rx, &ctx->ry);
+    ctx->rw = w;
+    ctx->rh = h;
+
+    if (frame > 0)
+    {
+        gfx_frame( 0, 0, w, h );
+        ctx->rx += frame;
+        ctx->ry += frame;
+        ctx->rw -= frame << 1;
+        ctx->rh -= frame << 1;
+    }
+}
+
+void gfx_end_window()
 {
     gfx_pop();
 }
@@ -162,10 +199,9 @@ void gfx_begin_menu(const char *name, uint16_t w, uint16_t h, MenuContext *menuc
     uint16_t x = (ctx->rw - w) >> 1;
     uint16_t y = (ctx->rh - h) >> 1;
 
-    gfx_pen(TEXT_LIME);
+    gfx_pen(TEXT_BLUE);
 
-    gfx_frame( x, y, w, h );
-    gfx_begin_region(x + 1, y + 1, w - 2, h - 2);
+    gfx_begin_window(ALIGN_CENTER | ALIGN_MIDDLE, 0, 0, w, h, 1);
 
     ctx->menuctx = menuctx;
     uint16_t pressed = input_pressed();
@@ -184,12 +220,13 @@ void gfx_begin_menu(const char *name, uint16_t w, uint16_t h, MenuContext *menuc
     if (menuctx->index < 0) menuctx->index = menuctx->count - 1;
     menuctx->count = 0;
 
+    gfx_pen(TEXT_DARK_GRAY);
     gfx_text_aligned(ALIGN_CENTER, name);
 }
 
 void gfx_end_menu()
 {
-    gfx_end_region();
+    gfx_end_window();
 }
 
 bool gfx_menuitem_select(const char *label, const char **options, int num_options, int *option_index)
@@ -326,7 +363,7 @@ void gfx_frame(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
         vram[ofs + c] = color | CHR_HORIZ;
 }
 
-void gfx_text_aligned(TextAlign align, const char *str)
+void gfx_text_aligned(Align align, const char *str)
 {
     uint16_t x = 0;
     int len = strlen(str);
@@ -362,7 +399,7 @@ void gfx_text_aligned(TextAlign align, const char *str)
     ctx->prevx = x;
 }
 
-void gfx_textf_aligned(TextAlign align, const char *fmt, ...)
+void gfx_textf_aligned(Align align, const char *fmt, ...)
 {
     char tmp[40];
     va_list args;
