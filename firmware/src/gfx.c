@@ -229,7 +229,7 @@ void gfx_end_menu()
     gfx_end_window();
 }
 
-bool gfx_menuitem_select(const char *label, const char **options, int num_options, int *option_index)
+bool gfx_menuitem_select_func(const char *label, const void *options, int num_options, MenuItemToString item_to_string, int *option_index)
 {
     char txt[40];
     bool changed = false;
@@ -261,7 +261,7 @@ bool gfx_menuitem_select(const char *label, const char **options, int num_option
         }
     }
 
-    const char *value_str = options[*option_index];
+    const char *value_str = item_to_string(options, *option_index);
     int width = ctx->rw;
     int label_len = strlen(label);
     int value_len = strlen(value_str);
@@ -291,6 +291,18 @@ bool gfx_menuitem_select(const char *label, const char **options, int num_option
 
     menuctx->count++;
     return changed;
+}
+
+static const char *menuitem_to_string_simple(const void *options, int index)
+{
+    const char **options_str = (const char **)options;
+
+    return options_str[index];
+}
+
+bool gfx_menuitem_select(const char *label, const char **options, int num_options, int *option_index)
+{
+    return gfx_menuitem_select_func(label, options, num_options, menuitem_to_string_simple, option_index);
 }
 
 bool gfx_menuitem_button(const char *label)

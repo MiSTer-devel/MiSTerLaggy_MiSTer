@@ -1,4 +1,4 @@
-#if defined(ML_DEBUG)
+#if ML_DEBUG
 
 #include <stddef.h>
 

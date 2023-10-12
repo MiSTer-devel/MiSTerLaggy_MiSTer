@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdbool.h>
 
 #include "hdmi.h"
 #include "clock.h"
@@ -26,27 +27,6 @@ typedef volatile struct
 } CRTC;
 
 CRTC *crtc = (CRTC *)0x800000;
-
-#define NUM_HDMI_MODES 14
-
-VideoMode hdmi_modes[NUM_HDMI_MODES] =
-{
-    { 1280, 110,  40, 220,  720,  5,  5, 20,  74.25 }, //1  1280x720@60
-	{ 1024,  24, 136, 160,  768,  3,  6, 29,  65,   }, //2  1024x768@60
-	{  720,  16,  62,  60,  480,  9,  6, 30,  27    }, //3  720x480@60
-	{  720,  12,  64,  68,  576,  5,  5, 39,  27    }, //4  720x576@50
-	{ 1280,  48, 112, 248, 1024,  1,  3, 38, 108    }, //5  1280x1024@60
-	{  800,  40, 128,  88,  600,  1,  4, 23,  40    }, //6  800x600@60
-	{  640,  16,  96,  48,  480, 10,  2, 33,  25.175 }, //7  640x480@60
-	{ 1280, 440,  40, 220,  720,  5,  5, 20,  74.25  }, //8  1280x720@50
-	{ 1920,  88,  44, 148, 1080,  4,  5, 36, 148.5   }, //9  1920x1080@60
-	{ 1920, 528,  44, 148, 1080,  4,  5, 36, 148.5   }, //10  1920x1080@50
-	{ 1366,  70, 143, 213,  768,  3,  3, 24,  85.5   }, //11 1366x768@60
-	{ 1024,  40, 104, 144,  600,  1,  3, 18,  48.96  }, //12 1024x600@60
-	{ 1920,  48,  32,  80, 1440,  2,  4, 38, 185.203 }, //13 1920x1440@60
-	{ 2048,  48,  32,  80, 1536,  2,  4, 38, 209.318 }, //14 2048x1536@60
-};
-
 
 #define VIO_SET_MODE 1
 #define VIO_SET_PLL 2
@@ -188,62 +168,38 @@ static void setPLL(double Fout)
     vio_write_pll(7, k);
 }
 
-static const VideoMode *hdmi_find_mode(uint16_t width, uint16_t height, float hz)
+static void calculate_cvt(int h_pixels, int v_lines, float refresh_rate, bool reduced_blanking, VideoMode *vmode);
+
+static bool hdmi_find_mode(uint16_t width, uint16_t height, float hz, VideoMode *mode)
 {
-    float min_diff = 999999999999;
-    int min_index = -1;
-    for( int i = 0; i < NUM_HDMI_MODES; i++ )
-    {
-        const VideoMode *mode = &hdmi_modes[i];
-        if (mode->hact != width || mode->vact != height) continue;
+    bool rb = (width * height) > ( 1920 * 1080);
 
-        int32_t h = mode->hact + mode->hfp + mode->hs + mode->hbp;
-        int32_t v = mode->vact + mode->vfp + mode->vs + mode->vbp;
-        float mhz = h * v * hz;
-        mhz /= 1000000.0;
-
-        float diff = mode->mhz - mhz;
-        diff = diff < 0.0 ? -diff : diff;
-        if (min_index == -1 || min_diff > diff)
-        {
-            min_index = i;
-            min_diff = diff;
-        }
-    }
-
-    if (min_index >= 0)
-    {
-        return &hdmi_modes[min_index];
-    }
-
-    return 0;
+    calculate_cvt(width, height, hz, rb, mode);
 }
 
 void hdmi_set_mode(uint16_t width, uint16_t height, float hz)
 {
-    const VideoMode *mode = hdmi_find_mode(width, height, hz);
+    VideoMode mode;
+    
+    hdmi_find_mode(width, height, hz, &mode);
 
-    if (mode == 0) return;
-
-    int32_t h = mode->hact + mode->hfp + mode->hs + mode->hbp;
-    int32_t v = mode->vact + mode->vfp + mode->vs + mode->vbp;
-    double mhz = h * v * hz;
+    double mhz = video_mode_pixels(&mode) * hz;
     mhz /= 1000000.0;
 
     vio_cmd(VIO_SET_OVERRIDE, 1);
     vio_cmd(VIO_SET_CFG, 0);
     vio_cmd_cont(VIO_SET_MODE);
-    vio_w16(mode->hact);
-    vio_w16(mode->hfp);
-    vio_w16(mode->hs);
-    vio_w16(mode->hbp);
+    vio_w16(mode.hact);
+    vio_w16(mode.hfp);
+    vio_w16(mode.hs);
+    vio_w16(mode.hbp);
 
-    vio_w16(mode->vact);
-    vio_w16(mode->vfp);
-    vio_w16(mode->vs);
-    vio_w16(mode->vbp);
+    vio_w16(mode.vact);
+    vio_w16(mode.vfp);
+    vio_w16(mode.vs);
+    vio_w16(mode.vbp);
     
-    vio_w16(1);
+    vio_w16(1); // low latency
     
     vio_disable();
 
@@ -321,4 +277,113 @@ void crt_set_mode(const VideoMode *mode)
     crtc->vfp = mode->vfp;
     crtc->vs = mode->vs;
     crtc->vbp = mode->vbp;
+}
+
+
+static const int CELL_GRAN_RND = 4;
+
+static int determine_vsync(int w, int h)
+{
+    const int arx[] =   {4, 16, 16, 5, 15};
+    const int ary[] =   {3,  9, 10, 4, 9 };
+	const int vsync[] = {4,  5,  6, 7, 7 };
+
+    for (int ar = 0; ar < 5; ar++)
+    {
+        int w_calc = ((h * arx[ar]) / (ary[ar] * CELL_GRAN_RND)) * CELL_GRAN_RND;
+        if (w_calc == w)
+        {
+            return vsync[ar];
+        }
+    }
+
+    return 10;
+}
+
+static void calculate_cvt(int h_pixels, int v_lines, float refresh_rate, bool reduced_blanking, VideoMode *vmode)
+{
+	// Based on xfree86 cvt.c and https://tomverbeure.github.io/video_timings_calculator
+
+	const int MIN_V_BPORCH = 6;
+	const int V_FRONT_PORCH = 3;
+
+	const int h_pixels_rnd = (h_pixels / CELL_GRAN_RND) * CELL_GRAN_RND;
+	const int v_sync = determine_vsync(h_pixels_rnd, v_lines);
+
+	int v_back_porch;
+	int h_blank, h_sync, h_back_porch, h_front_porch;
+	int total_pixels;
+	float pixel_freq;
+
+	if (reduced_blanking)
+	{
+		const int RB_V_FPORCH = 3;
+		const float RB_MIN_V_BLANK = 460.0f;
+
+		float h_period_est = ((1000000.0f / refresh_rate) - RB_MIN_V_BLANK) / (float)v_lines;
+		h_blank = 160;
+
+		int vbi_lines = (int)(RB_MIN_V_BLANK / h_period_est) + 1;
+
+		int rb_min_vbi = RB_V_FPORCH + v_sync + MIN_V_BPORCH;
+		int act_vbi_lines = (vbi_lines < rb_min_vbi) ? rb_min_vbi : vbi_lines;
+
+		int total_v_lines = act_vbi_lines + v_lines;
+
+		total_pixels = h_blank + h_pixels_rnd;
+
+		pixel_freq = refresh_rate * (float)(total_v_lines * total_pixels) / 1000000.0f;
+
+		v_back_porch = act_vbi_lines - V_FRONT_PORCH - v_sync;
+
+		h_sync = 32;
+		h_back_porch = 80;
+		h_front_porch = h_blank - h_sync - h_back_porch;
+	}
+	else
+	{
+		const float MIN_VSYNC_BP = 550.0f;
+		const float C_PRIME = 30.0f;
+		const float M_PRIME = 300.0f;
+		const float H_SYNC_PER = 0.08f;
+
+		const float h_period_est = ((1.0f / refresh_rate) - MIN_VSYNC_BP / 1000000.0f) / (float)(v_lines + V_FRONT_PORCH) * 1000000.0f;
+
+		int v_sync_bp = (int)(MIN_VSYNC_BP / h_period_est) + 1;
+		if (v_sync_bp < (v_sync + MIN_V_BPORCH))
+		{
+			v_sync_bp = v_sync + MIN_V_BPORCH;
+		}
+
+		v_back_porch = v_sync_bp - v_sync;
+
+		float ideal_duty_cycle = C_PRIME - (M_PRIME * h_period_est / 1000.0f);
+
+		if (ideal_duty_cycle < 20)
+		{
+			h_blank = (h_pixels_rnd / 4 / (2 * CELL_GRAN_RND)) * (2 * CELL_GRAN_RND);
+		}
+		else
+		{
+			h_blank = (int)((float)h_pixels_rnd * ideal_duty_cycle / (100.0f - ideal_duty_cycle) / (2 * CELL_GRAN_RND)) * (2 * CELL_GRAN_RND);
+		}
+
+		total_pixels = h_pixels_rnd + h_blank;
+
+		h_sync = (int)(H_SYNC_PER * (float)total_pixels / CELL_GRAN_RND) * CELL_GRAN_RND;
+		h_back_porch = h_blank / 2;
+		h_front_porch = h_blank - h_sync - h_back_porch;
+
+		pixel_freq = total_pixels / h_period_est;
+	}
+
+	vmode->hact = h_pixels_rnd;
+	vmode->hfp = h_front_porch;
+	vmode->hs = h_sync;
+	vmode->hbp = h_back_porch;
+	vmode->vact = v_lines;
+	vmode->vfp = V_FRONT_PORCH - 1;
+	vmode->vs = v_sync;
+	vmode->vbp = v_back_porch + 1;
+	vmode->mhz = pixel_freq;
 }

@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "clock.h"
 
-#if defined(ML_DEBUG)
+#if ML_DEBUG
 
 typedef struct
 {

@@ -37,7 +37,7 @@ __attribute__((interrupt)) void trap13_handler();
 __attribute__((interrupt)) void trap14_handler();
 __attribute__((interrupt)) void trap15_handler();
 
-static inline void enable_interrupts() { asm( "andi #0xf8ff, %sr" ); }
-static inline void disable_interrupts() { asm( "ori #0x0700, %sr" ); }
+static inline void enable_interrupts() { __asm__( "andi #0xf8ff, %sr" ); }
+static inline void disable_interrupts() { __asm__( "ori #0x0700, %sr" ); }
 
 #endif

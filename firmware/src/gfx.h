@@ -33,11 +33,14 @@ void gfx_clear();
 void gfx_push();
 void gfx_pop();
 
+typedef const char *(*MenuItemToString)(const void *options, int index);
+
 void gfx_begin_window(Align align, int16_t x, int16_t y, uint16_t w, uint16_t h, int16_t frame);
 void gfx_end_window();
 void gfx_begin_menu(const char *name, uint16_t w, uint16_t h, MenuContext *menuctx);
 void gfx_end_menu();
 bool gfx_menuitem_select(const char *label, const char **options, int num_options, int *option_index);
+bool gfx_menuitem_select_func(const char *label, const void *options, int num_options, MenuItemToString func, int *option_index);
 bool gfx_menuitem_button(const char *label);
 
 void gfx_pen(int color256);

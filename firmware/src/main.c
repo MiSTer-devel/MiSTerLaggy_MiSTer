@@ -11,7 +11,7 @@
 #include "clock.h"
 #include "debug.h"
 
-#define FIRMWARE_VERSION 0x0100
+#define FIRMWARE_VERSION "1.1"
 
 #define RGB(r, g, b) ( ( ((r) & 0xf8) << 7 ) | ( ((g) & 0xf8) << 2 ) | ( ((b) & 0xf8) >> 3 ) )
 
@@ -23,7 +23,6 @@ uint16_t *palette_ram = (uint16_t *)0x920000;
 volatile uint16_t *user_io = (volatile uint16_t *)0x300000;
 uint16_t *int_ctrl = (uint16_t *)0x700000;
 uint32_t *core_version = (uint32_t *)0xf00000;
-
 
 #define INT2_CTRL(x) (((x) & 0xf) << 0)
 #define INT4_CTRL(x) (((x) & 0xf) << 4)
@@ -110,35 +109,20 @@ static const HDMIResolution hdmi_resolutions[] =
 {
     {  640,  480 },
     {  720,  480 },
-    {  720,  576 },
     {  800,  600 },
-    { 1024,  600 },
-    { 1024,  768 },
     { 1280,  720 },
-    { 1280, 1024 },
+    { 1024,  768 },
     { 1366,  768 },
+    { 1280,  960 },
+    { 1708,  960 },
     { 1920, 1080 },
+    { 1600, 1200 },
+    { 1792, 1344 },
     { 1920, 1440 },
     { 2048, 1536 }
 };
 
-static const char *hdmi_resolution_names[] =
-{
-    "640x480",
-    "720x480",
-    "720x576",
-    "800x600",
-    "1024x600",
-    "1024x768",
-    "1280x720",
-    "1280x1024",
-    "1366x768",
-    "1920x1080",
-    "1920x1440",
-    "2048x1536"
-};
-
-static const float hdmi_refresh_rates[] =
+static const int hdmi_refresh_rates[] =
 {
     24,
     30,
@@ -152,36 +136,36 @@ static const float hdmi_refresh_rates[] =
     57,
     58,
     59,
-    59.94,
     60,
+    61,
     62,
-    72,
-    90,
-    120,
+    63,
+    64,
+    65,
+    72
 };
 
-static const char *hdmi_refresh_rate_names[] =
+static const char *resolution_to_string(const void *options, int index)
 {
-    "24hz",
-    "30hz",
-    "50hz",
-    "51hz",
-    "52hz",
-    "53hz",
-    "54hz",
-    "55hz",
-    "56hz",
-    "57hz",
-    "58hz",
-    "59hz",
-    "59.94hz",
-    "60hz",
-    "62hz",
-    "72hz",
-    "90hz",
-    "120hz"
-};
+    static char tmp[32];
 
+    const HDMIResolution *res = (const HDMIResolution *)options;
+
+    snprintf(tmp, sizeof(tmp), "%ux%u", res[index].width, res[index].height);
+
+    return tmp;
+}
+
+static const char *refresh_to_string(const void *options, int index)
+{
+    static char tmp[10];
+
+    const int *hz = (const int *)options;
+
+    snprintf(tmp, sizeof(tmp), "%dhz", hz[index]);
+
+    return tmp;
+}
 
 static bool draw_menu(bool reset)
 {
@@ -203,8 +187,8 @@ static bool draw_menu(bool reset)
         }
         else
         {
-            mode_idx = 9;
-            refresh_idx = 13;
+            mode_idx = 8;
+            refresh_idx = 12;
         }
     }
 
@@ -212,8 +196,8 @@ static bool draw_menu(bool reset)
 
     gfx_begin_menu("VIDEO CONFIG", 28, 15, &menuctx);
     
-    gfx_menuitem_select("Resolution", hdmi_resolution_names, ARRAY_COUNT(hdmi_resolution_names), &mode_idx);
-    gfx_menuitem_select("Refresh Rate", hdmi_refresh_rate_names, ARRAY_COUNT(hdmi_refresh_rate_names), &refresh_idx);
+    gfx_menuitem_select_func("Resolution", hdmi_resolutions, ARRAY_COUNT(hdmi_resolutions), resolution_to_string, &mode_idx);
+    gfx_menuitem_select_func("Refresh Rate", hdmi_refresh_rates, ARRAY_COUNT(hdmi_refresh_rates), refresh_to_string, &refresh_idx);
 
     if (mode_idx != applied_mode_idx || refresh_idx != applied_refresh_idx)
     {
@@ -226,7 +210,9 @@ static bool draw_menu(bool reset)
             applied_refresh_idx = refresh_idx;
             close_menu = true;
 
-            snprintf(video_mode_desc, sizeof(video_mode_desc), "%s @ %s", hdmi_resolution_names[mode_idx], hdmi_refresh_rate_names[refresh_idx]);
+            snprintf(video_mode_desc, sizeof(video_mode_desc), "%s @ %s",
+                        resolution_to_string(hdmi_resolutions, mode_idx),
+                        refresh_to_string(hdmi_refresh_rates, refresh_idx));
         }
     }
 
@@ -270,10 +256,10 @@ int ticks_to_ms_str(uint32_t ticks, char *str, int len)
 {
     uint32_t ms, us;
     clock_ticks_to_ms_us(ticks, &ms, &us);
-    return snprintf(str, len, "%u.%u", ms, us);
+    return snprintf(str, len, "%u.%03u", ms, us);
 }
 
-#define HISTORY_SIZE 32
+#define HISTORY_SIZE 16
 uint32_t samples[HISTORY_SIZE];
 uint32_t latest_sample;
 uint32_t sample_idx = 0;
@@ -377,8 +363,15 @@ void do_sampling()
             else if (sample_seq == frame_seq && sample_seq == sensor_seq)
             {
                 set_state(ST_CLEAR);
-                uint32_t tick_diff = sensor_ticks - frame_ticks;
-                record_new_sample(tick_diff);
+                if (frame_ticks >= sensor_ticks)
+                {
+                    record_missing_sample();
+                }
+                else
+                {
+                    uint32_t tick_diff = sensor_ticks - frame_ticks;
+                    record_new_sample(tick_diff);
+                }
             }
             break;
 
@@ -441,7 +434,7 @@ void draw_version()
 {
     gfx_pen(TEXT_DARK);
     gfx_begin_window(ALIGN_BOTTOM | ALIGN_RIGHT, 0, 2, 26, 1, 0);
-    gfx_textf_aligned(ALIGN_LEFT, "MiSTer Laggy %u.%u/%06u", (FIRMWARE_VERSION >> 8) & 0xff, FIRMWARE_VERSION & 0xff, *core_version);
+    gfx_textf_aligned(ALIGN_LEFT, "MiSTer Laggy %s/%06u", FIRMWARE_VERSION, *core_version);
     gfx_end_window();
 }
 
