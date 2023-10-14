@@ -34,7 +34,10 @@ module system
 	input  [15:0] vio_cfg,
 
 	input         hdmi_vblank,
+
 	output reg    new_vmode,
+	output [11:0] arx,
+	output [11:0] ary,
 
 	output [5:0] pll_addr,
 	output [31:0] pll_value,
@@ -317,7 +320,7 @@ crtc crtc(
 
     .wr((crtc_sel & ~cpu_rw) ? ~cpu_ds_n : 2'b00),
 
-    .address(cpu_addr[4:1]),
+    .address(cpu_addr[5:1]),
     .din(cpu_dout),
     .dout(crtc_dout),
 
@@ -328,6 +331,9 @@ crtc crtc(
     .vsync(VSync),
     .vblank(VBlank),
     .vcnt(vcnt),
+
+	.arx(arx),
+	.ary(ary),
 
 	.pll_addr(pll_addr),
 	.pll_value(pll_value),

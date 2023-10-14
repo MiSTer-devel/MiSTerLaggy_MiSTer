@@ -11,7 +11,7 @@
 #include "clock.h"
 #include "debug.h"
 
-#define FIRMWARE_VERSION "1.1"
+#define FIRMWARE_VERSION "1.2"
 
 #define RGB(r, g, b) ( ( ((r) & 0xf8) << 7 ) | ( ((g) & 0xf8) << 2 ) | ( ((b) & 0xf8) >> 3 ) )
 
@@ -71,13 +71,10 @@ __attribute__((interrupt)) void level6_handler()
 }
 
 
-#define STATUS_W 24
+#define STATUS_W 16
 #define STATUS_H 4
 typedef struct
 {
-    uint16_t x;
-    uint16_t y;
-
     char lines[STATUS_H][STATUS_W+1];
     uint8_t colors[STATUS_H];
 } StatusInfo;
@@ -88,7 +85,7 @@ char video_mode_desc[32];
 
 static void draw_status()
 {
-    gfx_begin_window(ALIGN_NONE, status.x, status.y, STATUS_W, STATUS_H + 1, 0);
+    gfx_begin_window(ALIGN_MIDDLE | ALIGN_RIGHT, 0, -2, 26, STATUS_H, 0);
 
     for( int i = 0; i < STATUS_H; i++ )
     {
@@ -103,23 +100,23 @@ typedef struct
 {
     uint16_t width;
     uint16_t height;
+    bool wide;
 } HDMIResolution;
 
 static const HDMIResolution hdmi_resolutions[] =
 {
-    {  640,  480 },
-    {  720,  480 },
-    {  800,  600 },
-    { 1280,  720 },
-    { 1024,  768 },
-    { 1366,  768 },
-    { 1280,  960 },
-    { 1708,  960 },
-    { 1920, 1080 },
-    { 1600, 1200 },
-    { 1792, 1344 },
-    { 1920, 1440 },
-    { 2048, 1536 }
+    {  640,  480, false },
+    {  800,  600, false },
+    { 1280,  720, true },
+    { 1024,  768, false },
+    { 1366,  768, false },
+    { 1280,  960, false },
+    { 1708,  960, true },
+    { 1920, 1080, true },
+    { 1600, 1200, false },
+    { 1792, 1344, false },
+    { 1920, 1440, false },
+    { 2048, 1536, false }
 };
 
 static const int hdmi_refresh_rates[] =
@@ -171,8 +168,10 @@ static bool draw_menu(bool reset)
 {
     static int mode_idx = 0;
     static int refresh_idx = 0;
+    static int aspect_idx = 0;
     static int applied_mode_idx = -1;
     static int applied_refresh_idx = -1;
+    static int applied_aspect_idx = -1;
 
     static MenuContext menuctx = INIT_MENU_CONTEXT;
 
@@ -184,11 +183,13 @@ static bool draw_menu(bool reset)
         {
             mode_idx = applied_mode_idx;
             refresh_idx = applied_refresh_idx;
+            aspect_idx = applied_aspect_idx;
         }
         else
         {
-            mode_idx = 8;
+            mode_idx = 7;
             refresh_idx = 12;
+            aspect_idx = 0;
         }
     }
 
@@ -199,15 +200,29 @@ static bool draw_menu(bool reset)
     gfx_menuitem_select_func("Resolution", hdmi_resolutions, ARRAY_COUNT(hdmi_resolutions), resolution_to_string, &mode_idx);
     gfx_menuitem_select_func("Refresh Rate", hdmi_refresh_rates, ARRAY_COUNT(hdmi_refresh_rates), refresh_to_string, &refresh_idx);
 
-    if (mode_idx != applied_mode_idx || refresh_idx != applied_refresh_idx)
+    if (hdmi_resolutions[mode_idx].wide)
+    {
+        const char *aspects[2] = { "4:3", "16:9" };
+        gfx_menuitem_select("Aspect Ratio", aspects, 2, &aspect_idx);
+    }
+    else
+    {
+        gfx_newline(2);
+    }
+
+    gfx_newline(1);
+
+    if (mode_idx != applied_mode_idx || refresh_idx != applied_refresh_idx || aspect_idx != applied_aspect_idx)
     {
         if (gfx_menuitem_button("Apply Changes"))
         {
+            bool wide = hdmi_resolutions[mode_idx].wide && (aspect_idx == 1);
             *int_ctrl = INT2_CTRL(INT_SRC_VBLANK) | INT4_CTRL(INT_SRC_HDMI_VBLANK | INT_INVERT) | INT6_CTRL(INT_SRC_USERIO);
-            gfx_set_240p(hdmi_refresh_rates[refresh_idx]);
+            gfx_set_240p(hdmi_refresh_rates[refresh_idx], wide);
             hdmi_set_mode(hdmi_resolutions[mode_idx].width, hdmi_resolutions[mode_idx].height, hdmi_refresh_rates[refresh_idx]);
             applied_mode_idx = mode_idx;
             applied_refresh_idx = refresh_idx;
+            applied_aspect_idx = aspect_idx;
             close_menu = true;
 
             snprintf(video_mode_desc, sizeof(video_mode_desc), "%s @ %s",
@@ -323,6 +338,9 @@ void update_sample_status()
 
 typedef enum { MODE_NO_SENSOR, MODE_SAMPLING, MODE_MENU } MainMode;
 
+#define BAR_W 11
+#define BAR_H 4
+
 void do_sampling()
 {
     uint32_t cur_ticks = clock_get_ticks();
@@ -383,11 +401,18 @@ void do_sampling()
 
     gfx_clear();
     gfx_pen(0x80);
-    gfx_rect(0, 0, 11, 4);
-    gfx_rect(0, 13, 11, 4);
-    gfx_rect(0, 26, 11, 4);
 
-    gfx_begin_window(ALIGN_NONE, 14, 24, 20, 2, 0);
+    int16_t rx, ry;
+    gfx_align_box(ALIGN_LEFT | ALIGN_TOP, 0, 0, BAR_W, BAR_H, &rx, &ry);
+    gfx_rect(rx, ry, BAR_W, BAR_H);
+
+    gfx_align_box(ALIGN_LEFT | ALIGN_MIDDLE, 0, 0, BAR_W, BAR_H, &rx, &ry);
+    gfx_rect(rx, ry, BAR_W, BAR_H);
+
+    gfx_align_box(ALIGN_LEFT | ALIGN_BOTTOM, 0, 0, BAR_W, BAR_H, &rx, &ry);
+    gfx_rect(rx, ry, BAR_W, BAR_H);
+
+    gfx_begin_window(ALIGN_BOTTOM | ALIGN_RIGHT, 0, 5, 26, 2, 0);
     gfx_pen(TEXT_BLUE);
     gfx_textf("Mode: %s", video_mode_desc);
     gfx_pen(TEXT_DARK_BLUE);
@@ -483,10 +508,8 @@ int main(int argc, char *argv[])
     *int_ctrl = INT2_CTRL(INT_SRC_VBLANK) | INT4_CTRL(INT_SRC_VBLANK | INT_INVERT) | INT6_CTRL(INT_SRC_USERIO);
 
     memset(&status, 0, sizeof(status));
-    status.x = 14;
-    status.y = 10;
 
-    gfx_set_240p(60);
+    gfx_set_240p(60, false);
 
     enable_interrupts();
 

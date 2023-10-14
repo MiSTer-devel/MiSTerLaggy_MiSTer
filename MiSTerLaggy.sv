@@ -204,9 +204,6 @@ assign BUTTONS = 0;
 
 //////////////////////////////////////////////////////////////////
 
-assign VIDEO_ARX = 12'd4;
-assign VIDEO_ARY = 12'd3;
-
 `include "build_id.v" 
 localparam CONF_STR = {
 	"MiSTerLaggy;;",
@@ -367,6 +364,8 @@ system system
 	.hdmi_vblank(HDMI_VBL),
 
 	.new_vmode(new_vmode),
+	.arx(VIDEO_ARX),
+	.ary(VIDEO_ARY),
 
 	.pll_addr(pll_addr),
 	.pll_value(pll_value),

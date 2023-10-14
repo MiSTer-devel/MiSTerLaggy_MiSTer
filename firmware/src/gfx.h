@@ -24,7 +24,7 @@ typedef struct
 
 #define INIT_MENU_CONTEXT { .index = -1, .count = -1, .tmp_option_idx = -1 }
 
-void gfx_set_240p(float hz);
+void gfx_set_240p(float hz, bool wide);
 
 void gfx_pageflip();
 
@@ -35,6 +35,7 @@ void gfx_pop();
 
 typedef const char *(*MenuItemToString)(const void *options, int index);
 
+void gfx_align_box(Align align, int16_t xadj, int16_t yadj, uint16_t w, uint16_t h, int16_t *x, int16_t *y);
 void gfx_begin_window(Align align, int16_t x, int16_t y, uint16_t w, uint16_t h, int16_t frame);
 void gfx_end_window();
 void gfx_begin_menu(const char *name, uint16_t w, uint16_t h, MenuContext *menuctx);

@@ -18,6 +18,9 @@ typedef volatile struct
     uint16_t vs;
     uint16_t vbp;
 
+    uint16_t arx;
+    uint16_t ary;
+
     uint32_t pll_data;
     uint16_t pll_address;
     uint16_t pll_io;
@@ -179,6 +182,7 @@ static bool hdmi_find_mode(uint16_t width, uint16_t height, float hz, VideoMode 
 
 void hdmi_set_mode(uint16_t width, uint16_t height, float hz)
 {
+    static float prev_mhz = 0.0f;
     VideoMode mode;
     
     hdmi_find_mode(width, height, hz, &mode);
@@ -217,7 +221,7 @@ static void crtc_write_pll(uint16_t address, uint32_t data)
     crtc->pll_io = 0xffff;
 }
 
-void crt_set_mode(const VideoMode *mode)
+void crt_set_mode(const VideoMode *mode, bool wide)
 {
 	double Fpix;
 	double fvco, ko;
@@ -277,6 +281,17 @@ void crt_set_mode(const VideoMode *mode)
     crtc->vfp = mode->vfp;
     crtc->vs = mode->vs;
     crtc->vbp = mode->vbp;
+
+    if (wide)
+    {
+        crtc->arx = 16;
+        crtc->ary = 9;
+    }
+    else
+    {
+        crtc->arx = 4;
+        crtc->ary = 3;
+    }
 }
 
 

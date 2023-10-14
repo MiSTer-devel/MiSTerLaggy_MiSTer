@@ -909,8 +909,8 @@ always @(posedge clk_vid) begin
 	reg [11:0] hcalc,videoh;
 	reg  [2:0] state;
 
-	hdmi_height <= (VSET && (VSET < HEIGHT)) ? VSET : HEIGHT;
-	hdmi_width  <= (HSET && (HSET < WIDTH))  ? HSET << HDMI_PR : WIDTH << HDMI_PR;
+	hdmi_height <= HEIGHT;
+	hdmi_width  <= WIDTH << HDMI_PR;
 
 	if(!ARY) begin
 		if(ARX == 1) begin

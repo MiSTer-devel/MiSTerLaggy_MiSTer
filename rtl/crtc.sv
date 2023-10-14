@@ -6,7 +6,7 @@ module crtc(
 
     input [1:0] wr,
 
-    input [3:0] address,
+    input [4:0] address,
     input [15:0] din,
     output [15:0] dout,
 
@@ -18,13 +18,16 @@ module crtc(
     output vblank,
     output [11:0] vcnt,
 
+    output [11:0] arx,
+    output [11:0] ary,
+
 	output [5:0] pll_addr,
 	output [31:0] pll_value,
 	output reg pll_write,
 	input      pll_busy
 );
 
-reg [15:0] ctrl[16];
+reg [15:0] ctrl[32];
 
 wire [9:0] ce_num = ctrl[0][9:0];
 wire [9:0] ce_denom = ctrl[1][9:0];
@@ -39,12 +42,15 @@ wire [11:0] vfp = ctrl[7][11:0];
 wire [11:0] vs = ctrl[8][11:0];
 wire [11:0] vbp = ctrl[9][11:0];
 
-assign pll_addr = ctrl[12][5:0];
-assign pll_value = {ctrl[10], ctrl[11]};
+assign arx = ctrl[10][11:0];
+assign ary = ctrl[11][11:0];
 
-localparam PLL_IO_REG = 13;
-localparam HCNT_REG = 14;
-localparam VCNT_REG = 15;
+assign pll_addr = ctrl[14][5:0];
+assign pll_value = {ctrl[12], ctrl[13]};
+
+localparam PLL_IO_REG = 15;
+localparam HCNT_REG = 16;
+localparam VCNT_REG = 17;
 
 assign hcnt = ctrl[HCNT_REG][11:0];
 assign vcnt = ctrl[VCNT_REG][11:0];

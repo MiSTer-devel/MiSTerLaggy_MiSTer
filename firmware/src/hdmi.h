@@ -22,7 +22,7 @@ static inline uint32_t video_mode_pixels(const VideoMode *m)
 
 void hdmi_set_mode(uint16_t width, uint16_t height, float hz);
 
-void crt_set_mode(const VideoMode *mode);
+void crt_set_mode(const VideoMode *mode, bool wide);
 
 
 #endif // HDMI_H

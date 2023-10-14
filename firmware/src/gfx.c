@@ -64,33 +64,52 @@ Context contexts[NUM_CTX];
 int context_idx = 0;
 Context *ctx = &contexts[0];
 
-void gfx_set_240p(float hz)
+void gfx_set_240p(float hz, bool wide)
 {
     VideoMode mode;
 
-    mode.hact = 320;
-    mode.hfp = 8;
-    mode.hs = 32;
-    mode.hbp = 40;
-    mode.vact = 240;
-    mode.vfp = 3;
-    mode.vs = 4;
-    mode.vbp = 6;
+    if (wide)
+    {
+        mode.hact = 384;
+        mode.hfp = 16;
+        mode.hs = 32;
+        mode.hbp = 48;
+        mode.vact = 216;
+        mode.vfp = 3;
+        mode.vs = 5;
+        mode.vbp = 6;
+
+        contexts[0].rx = 0;
+        contexts[0].ry = 0;
+        contexts[0].rw = 48;
+        contexts[0].rh = 27;
+    }
+    else
+    {
+        mode.hact = 320;
+        mode.hfp = 8;
+        mode.hs = 32;
+        mode.hbp = 40;
+        mode.vact = 240;
+        mode.vfp = 3;
+        mode.vs = 4;
+        mode.vbp = 6;
+
+        contexts[0].rx = 0;
+        contexts[0].ry = 0;
+        contexts[0].rw = 40;
+        contexts[0].rh = 30;
+    }
 
     uint32_t pixels = video_mode_pixels(&mode);
     mode.mhz = (hz * pixels) / 1000000.0;
-    crt_set_mode(&mode);
+    crt_set_mode(&mode, wide);
 
-    contexts[0].rx = 0;
-    contexts[0].ry = 0;
-    contexts[0].rw = 40;
-    contexts[0].rh = 30;
-
-    page_tile_ctrl[0].hofs = -(mode.hs - 1);
+    page_tile_ctrl[0].hofs = -(mode.hs + mode.hfp- 9);
     page_tile_ctrl[0].vofs = -mode.vbp;
     page_vram[0] = vram_base;
 
-    page_tile_ctrl[1].hofs = -(mode.hs - 1);
+    page_tile_ctrl[1].hofs = -(mode.hs + mode.hfp - 9);
     page_tile_ctrl[1].vofs = (64 * 8) - mode.vbp;
     page_vram[1] = vram_base + (TILE_MAX_W * 64);
 
@@ -143,7 +162,7 @@ void gfx_pop()
     if (context_idx < NUM_CTX) ctx = &contexts[context_idx];
 }
 
-static void gfx_align_box(Align align, int16_t xadj, int16_t yadj, uint16_t w, uint16_t h, int16_t *x, int16_t *y)
+void gfx_align_box(Align align, int16_t xadj, int16_t yadj, uint16_t w, uint16_t h, int16_t *x, int16_t *y)
 {
     if( align & ALIGN_CENTER )
     {
