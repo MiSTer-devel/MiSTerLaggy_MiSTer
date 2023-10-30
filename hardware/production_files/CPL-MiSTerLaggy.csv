@@ -1,0 +1,6 @@
+Designator,Val,Package,Mid X,Mid Y,Rotation,Layer
+J1,USB_C_Receptacle_USB2.0,USB_C_Receptacle_G-Switch_GT-USB-7010ASV,0.0,6.8,180.0,top
+Q1,PT17-21C/L41/TR8,LED_0805_2012Metric,0.0,-6.0,0.0,top
+Q2,2N7002,SOT-23,-3.1875,-0.0,0.0,top
+R1,300K,R_0603_1608Metric,4.2,-0.0,90.0,top
+R2,1K,R_0603_1608Metric,2.2,-0.0,90.0,top
