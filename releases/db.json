@@ -1,0 +1,16 @@
+{
+    "db_id": "MiSTerLaggy",
+    "timestamp": "1702676121",
+    "files": {
+        "_Utility/MiSTerLaggy_20231014.rbf": {
+            "hash": "ffcb50e641f688e9af027f1156c2b9ec",
+            "size": 3096888,
+            "url": "https://raw.githubusercontent.com/MiSTer-devel/MiSTerLaggy_MiSTer/main/releases/MiSTerLaggy_20231014.rbf",
+            "reboot": false,
+            "tags": []
+        }
+    },
+    "folders": {
+        "_Utility": {}
+    }
+}
