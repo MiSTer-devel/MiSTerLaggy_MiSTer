@@ -27,7 +27,7 @@ DATABASE=$(jq --null-input \
   --indent 4 \
 '{
     "db_id": $db_id,
-    "timestamp": $timestamp,
+    "timestamp": $timestamp|tonumber,
     "files": {
         $file: {
             "hash": $hash,
