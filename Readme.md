@@ -5,7 +5,16 @@ MiSTer Laggy is a display latency tester for use with the MiSTer FPGA system. It
 ![Sensor](assets/sensor.jpg)
 
 ## Setup
-* Copy the latest core from the `releases/` directory to your MiSTer
+
+Add the following to your `downloader.ini` to install through the [Downloader](https://github.com/MiSTer-devel/Downloader_MiSTer/)
+
+```ini
+[MiSTerLaggy]
+db_url = https://raw.githubusercontent.com/MiSTer-devel/MiSTerLaggy_MiSTer/main/releases/db.json
+```
+
+Or manually copy the latest core from the `releases/` directory to your MiSTer
+
 * Connect the MiSTer Laggy sensor to the User Port with a USB A-C cable
 * Launch the MiSTer Laggy core
 
