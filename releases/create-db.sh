@@ -6,15 +6,13 @@ DB_ID="MiSTerLaggy"
 TIMESTAMP=$(date +%s)
 BASE_URL="https://raw.githubusercontent.com/MiSTer-devel/MiSTerLaggy_MiSTer/main/releases"
 
-# TODO: this loop is frivolous and only ends up adding the latest release to the db
-for rbf in *.rbf; do
-    FILE=$rbf
+# shellcheck disable=SC2012
+LATEST_FILE=$(ls -t -- *.rbf | head -1)
 
-    HASH=$(md5 -q "$rbf")
-    SIZE=$(wc -c < "$rbf")
-    URL="$BASE_URL/$rbf"
-    FILE="_Utility/$rbf"
-done
+HASH=$(md5 -q "$LATEST_FILE")
+SIZE=$(wc -c < "$LATEST_FILE")
+URL="$BASE_URL/$LATEST_FILE"
+FILE="_Utility/$LATEST_FILE"
 
 
 DATABASE=$(jq --null-input \
