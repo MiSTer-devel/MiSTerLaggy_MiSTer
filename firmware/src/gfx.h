@@ -47,7 +47,10 @@ bool gfx_menuitem_button(const char *label);
 void gfx_pen(int color256);
 
 void gfx_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h);
+void gfx_image(uint8_t tile, uint8_t color, uint16_t x, uint16_t y, uint16_t w, uint16_t h);
 void gfx_frame(uint16_t x, uint16_t y, uint16_t w, uint16_t h);
+
+void gfx_display_border();
 
 #define gfx_text(x) gfx_text_aligned(ALIGN_LEFT, x);
 #define gfx_textf(x, ...) gfx_textf_aligned(ALIGN_LEFT, x, __VA_ARGS__);

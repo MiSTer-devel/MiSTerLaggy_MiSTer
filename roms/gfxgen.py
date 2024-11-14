@@ -20,6 +20,24 @@ def import_font():
         sheet[mapping[idx]] = data_1bit[tile_start:tile_start+64]
         idx += 1
 
+def import_misterkun():
+    im = Image.open('misterkun.png')
+    palette = [ min(x+7, 255) >> 3 for x in im.getpalette() ]
+
+    for i in range(0, len(palette), 3):
+        r = palette[i+0]
+        g = palette[i+1]
+        b = palette[i+2]
+        color = (r & 0x1f) << 10 | (g & 0x1f) << 5 | (b & 0x1f);
+        print(f"{color:x}")
+    
+    idx = 128
+    for yy in range(0, im.height, 8):
+        for xx in range(0, im.width, 8):
+            sub_im = im.crop((xx, yy, xx + 8, yy + 8))
+            sheet[idx] = list(sub_im.getdata())
+            idx += 1
+
 def write_sheet(out):
     blank = [0] * (8*8)
     out.write(f"DEPTH = 2048;\nWIDTH = 32;\nDATA_RADIX = BIN;\nADDRESS_RADIX = HEX;\nCONTENT\nBEGIN\n")
@@ -42,4 +60,5 @@ def write_sheet(out):
 
 
 import_font()
+import_misterkun()
 write_sheet(open('gfx.mif', 'wt'))

@@ -16,6 +16,11 @@
 #define CHR_BR 3
 #define CHR_BL 26
 
+#define CHR_TOP 13
+#define CHR_BOT 14
+#define CHR_LEFT 22
+#define CHR_RIGHT 2
+
 
 typedef struct
 {
@@ -392,6 +397,44 @@ void gfx_frame(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
     vram[ofs + w - 1] = color | CHR_BR;
     for( int c = 1; c < (w - 1); c++ )
         vram[ofs + c] = color | CHR_HORIZ;
+}
+
+void gfx_image(uint8_t tile, uint8_t color, uint16_t x, uint16_t y, uint16_t w, uint16_t h)
+{
+    uint16_t tiledata = (color << 8) | tile;
+    int ofs = ( (ctx->ry + y) * TILE_MAX_W ) + x + ctx->rx;
+
+    for( uint16_t y2 = 0; y2 < h; y2++ )
+    {
+        for( uint16_t x2 = 0; x2 < h; x2++ )
+        {
+            vram[ofs + x2] = tiledata;
+            tiledata++;
+        }
+        ofs += TILE_MAX_W;
+    }
+}
+
+void gfx_display_border()
+{
+    uint16_t color = ctx->pen << 8;
+    int y3 = ctx->rh / 3;
+    int ofs = (ctx->ry * TILE_MAX_W) + ctx->rx + (ctx->rw >> 1);
+
+    vram[ofs] = color | CHR_TOP;
+    vram[ofs + 1] = color | CHR_TOP;
+
+    ofs += TILE_MAX_W * (ctx->rh - 1);
+    vram[ofs] = color | CHR_BOT;
+    vram[ofs + 1] = color | CHR_BOT;
+
+    ofs = ((ctx->ry + (y3 - 1)) * TILE_MAX_W) + ctx->rx;
+    vram[ofs] = color | CHR_LEFT;
+    vram[ofs + ctx->rw - 1] = color | CHR_RIGHT;
+
+    ofs += (y3 + 1) * TILE_MAX_W;
+    vram[ofs] = color | CHR_LEFT;
+    vram[ofs + ctx->rw - 1] = color | CHR_RIGHT;
 }
 
 void gfx_text_aligned(Align align, const char *str)

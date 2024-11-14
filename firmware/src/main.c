@@ -4,7 +4,6 @@
 
 #include "util.h"
 #include "interrupts.h"
-#include "palette.h"
 #include "input.h"
 #include "hdmi.h"
 #include "gfx.h"
@@ -81,11 +80,22 @@ typedef struct
 
 StatusInfo status;
 
+int test_position = 0;
+static inline Align align_test()
+{
+    return test_position == 0 ? ALIGN_LEFT : ALIGN_RIGHT;
+}
+
+static inline Align align_info()
+{
+    return test_position == 0 ? ALIGN_RIGHT : ALIGN_LEFT;
+}
+
 char video_mode_desc[32];
 
 static void draw_status()
 {
-    gfx_begin_window(ALIGN_MIDDLE | ALIGN_RIGHT, 0, -2, 26, STATUS_H, 0);
+    gfx_begin_window(ALIGN_MIDDLE | align_info(), 0, -2, 26, STATUS_H, 0);
 
     for( int i = 0; i < STATUS_H; i++ )
     {
@@ -199,6 +209,9 @@ static bool draw_menu(bool reset)
     
     gfx_menuitem_select_func("Resolution", hdmi_resolutions, ARRAY_COUNT(hdmi_resolutions), resolution_to_string, &mode_idx);
     gfx_menuitem_select_func("Refresh Rate", hdmi_refresh_rates, ARRAY_COUNT(hdmi_refresh_rates), refresh_to_string, &refresh_idx);
+
+    const char *test_positions[2] = { "Left", "Right" };
+    gfx_menuitem_select("Test Position", test_positions, 2, &test_position);
 
     if (hdmi_resolutions[mode_idx].wide)
     {
@@ -400,19 +413,25 @@ void do_sampling()
 
 
     gfx_clear();
+    gfx_pen(TEXT_DARK_GRAY);
+    gfx_display_border();
+
     gfx_pen(0x80);
 
     int16_t rx, ry;
-    gfx_align_box(ALIGN_LEFT | ALIGN_TOP, 0, 0, BAR_W, BAR_H, &rx, &ry);
+    gfx_align_box(align_test() | ALIGN_TOP, 0, 0, BAR_W, BAR_H, &rx, &ry);
     gfx_rect(rx, ry, BAR_W, BAR_H);
 
-    gfx_align_box(ALIGN_LEFT | ALIGN_MIDDLE, 0, 0, BAR_W, BAR_H, &rx, &ry);
+    gfx_align_box(align_test() | ALIGN_MIDDLE, 0, 0, BAR_W, BAR_H, &rx, &ry);
     gfx_rect(rx, ry, BAR_W, BAR_H);
 
-    gfx_align_box(ALIGN_LEFT | ALIGN_BOTTOM, 0, 0, BAR_W, BAR_H, &rx, &ry);
+    gfx_align_box(align_test() | ALIGN_BOTTOM, 0, 0, BAR_W, BAR_H, &rx, &ry);
     gfx_rect(rx, ry, BAR_W, BAR_H);
 
-    gfx_begin_window(ALIGN_BOTTOM | ALIGN_RIGHT, 0, 5, 26, 2, 0);
+    gfx_align_box(align_info() | ALIGN_TOP, 2, 2, 4, 4, &rx, &ry);
+    gfx_image(0x80, 0x40, rx, ry, 4, 4);
+
+    gfx_begin_window(ALIGN_BOTTOM | align_info(), 0, 5, 26, 2, 0);
     gfx_pen(TEXT_BLUE);
     gfx_textf("Mode: %s", video_mode_desc);
     gfx_pen(TEXT_DARK_BLUE);
@@ -458,7 +477,7 @@ void draw_no_sensor()
 void draw_version()
 {
     gfx_pen(TEXT_DARK);
-    gfx_begin_window(ALIGN_BOTTOM | ALIGN_RIGHT, 0, 2, 26, 1, 0);
+    gfx_begin_window(ALIGN_BOTTOM | align_info(), 0, 2, 26, 1, 0);
     gfx_textf_aligned(ALIGN_LEFT, "MiSTer Laggy %s/%06u", FIRMWARE_VERSION, *core_version);
     gfx_end_window();
 }
@@ -490,8 +509,19 @@ void set_palette()
         palette_ram[(i << 1) + 0] = RGB(0, 0, 0);
         palette_ram[(i << 1) + 1] = base_palette[i];
     }
-    palette_ram[32] = RGB(0,0,0);
-    palette_ram[33] = RGB(0xff,0xff,0xff);
+
+    palette_ram[0x20] = RGB(0,0,0);
+    palette_ram[0x21] = RGB(0xff,0xff,0xff);
+
+    /* Misterkun */
+    palette_ram[0x40] = RGB(0,0,0);
+    palette_ram[0x41] = RGB(8,8,8);
+    palette_ram[0x42] = RGB(180,180,180);
+    palette_ram[0x43] = RGB(255,119,175);
+    palette_ram[0x44] = RGB(233,141,184);
+    palette_ram[0x45] = RGB(240,239,239);
+    palette_ram[0x46] = RGB(255,255,255);
+
     palette_ram[0x80] = RGB(0,0,0);
 }
 

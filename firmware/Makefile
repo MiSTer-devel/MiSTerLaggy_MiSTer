@@ -1,6 +1,8 @@
 CC = m68k-elf-gcc
 OBJCOPY = m68k-elf-objcopy
 
+MISTER = root@mister-dev
+
 TARGET = finalb_test
 SRCS = init.c main.c input.c hdmi.c gfx.c clock.c debug.c interrupts_default.c printf/printf.c
 
@@ -42,5 +44,9 @@ $(BUILD_DIR)/cpu.elf: $(OBJS)
 
 $(BUILD_DIRS):
 	mkdir -p $@
+
+mister: $(BUILD_DIR)/cpu.bin
+	scp $^ $(MISTER):/media/fat/games/MiSTerLaggy/
+	ssh $(MISTER) "echo load_core _Utility/MiSTerLaggy.rbf > /dev/MiSTer_cmd"
 
 -include $(OBJS:o=d)
