@@ -22,14 +22,13 @@ def import_font():
 
 def import_misterkun():
     im = Image.open('misterkun.png')
-    palette = [ min(x+7, 255) >> 3 for x in im.getpalette() ]
+    palette = [ min(x+7, 255) for x in im.getpalette() ]
 
     for i in range(0, len(palette), 3):
         r = palette[i+0]
         g = palette[i+1]
         b = palette[i+2]
-        color = (r & 0x1f) << 10 | (g & 0x1f) << 5 | (b & 0x1f);
-        print(f"{color:x}")
+        print(f"RGB({r},{g},{b}),")
     
     idx = 128
     for yy in range(0, im.height, 8):

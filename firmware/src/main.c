@@ -10,7 +10,7 @@
 #include "clock.h"
 #include "debug.h"
 
-#define FIRMWARE_VERSION "1.2"
+#define FIRMWARE_VERSION "1.3"
 
 #define RGB(r, g, b) ( ( ((r) & 0xf8) << 7 ) | ( ((g) & 0xf8) << 2 ) | ( ((b) & 0xf8) >> 3 ) )
 
@@ -70,6 +70,18 @@ __attribute__((interrupt)) void level6_handler()
 }
 
 
+static uint32_t rand_state = 0xdeadbeef;
+uint32_t rand32()
+{
+ 	uint32_t x = rand_state;
+	x ^= x << 13;
+	x ^= x >> 17;
+	x ^= x << 5;
+    rand_state = x;
+	return x;
+}
+
+
 #define STATUS_W 16
 #define STATUS_H 4
 typedef struct
@@ -95,7 +107,7 @@ char video_mode_desc[32];
 
 static void draw_status()
 {
-    gfx_begin_window(ALIGN_MIDDLE | align_info(), 0, -2, 26, STATUS_H, 0);
+    gfx_begin_window(ALIGN_MIDDLE | align_info(), 2, -2, 24, STATUS_H, 0);
 
     for( int i = 0; i < STATUS_H; i++ )
     {
@@ -205,13 +217,10 @@ static bool draw_menu(bool reset)
 
     gfx_clear();
 
-    gfx_begin_menu("VIDEO CONFIG", 28, 15, &menuctx);
+    gfx_begin_menu("CONFIG", 28, 18, &menuctx);
     
     gfx_menuitem_select_func("Resolution", hdmi_resolutions, ARRAY_COUNT(hdmi_resolutions), resolution_to_string, &mode_idx);
     gfx_menuitem_select_func("Refresh Rate", hdmi_refresh_rates, ARRAY_COUNT(hdmi_refresh_rates), refresh_to_string, &refresh_idx);
-
-    const char *test_positions[2] = { "Left", "Right" };
-    gfx_menuitem_select("Test Position", test_positions, 2, &test_position);
 
     if (hdmi_resolutions[mode_idx].wide)
     {
@@ -227,7 +236,7 @@ static bool draw_menu(bool reset)
 
     if (mode_idx != applied_mode_idx || refresh_idx != applied_refresh_idx || aspect_idx != applied_aspect_idx)
     {
-        if (gfx_menuitem_button("Apply Changes"))
+        if (gfx_menuitem_button("Apply Video Changes"))
         {
             bool wide = hdmi_resolutions[mode_idx].wide && (aspect_idx == 1);
             *int_ctrl = INT2_CTRL(INT_SRC_VBLANK) | INT4_CTRL(INT_SRC_HDMI_VBLANK | INT_INVERT) | INT6_CTRL(INT_SRC_USERIO);
@@ -243,6 +252,10 @@ static bool draw_menu(bool reset)
                         refresh_to_string(hdmi_refresh_rates, refresh_idx));
         }
     }
+
+    gfx_newline(2);
+    const char *test_positions[2] = { "Left", "Right" };
+    gfx_menuitem_select("Test Position", test_positions, 2, &test_position);
 
     gfx_end_menu();
 
@@ -429,9 +442,12 @@ void do_sampling()
     gfx_rect(rx, ry, BAR_W, BAR_H);
 
     gfx_align_box(align_info() | ALIGN_TOP, 2, 2, 4, 4, &rx, &ry);
-    gfx_image(0x80, 0x40, rx, ry, 4, 4);
+    if ((rand32() & 0xff33) == 0x0000)
+        gfx_image(0x80 + 16, 0x40, rx, ry, 4, 4);
+    else
+        gfx_image(0x80, 0x40, rx, ry, 4, 4);
 
-    gfx_begin_window(ALIGN_BOTTOM | align_info(), 0, 5, 26, 2, 0);
+    gfx_begin_window(ALIGN_BOTTOM | align_info(), 2, 5, 24, 2, 0);
     gfx_pen(TEXT_BLUE);
     gfx_textf("Mode: %s", video_mode_desc);
     gfx_pen(TEXT_DARK_BLUE);
@@ -477,7 +493,7 @@ void draw_no_sensor()
 void draw_version()
 {
     gfx_pen(TEXT_DARK);
-    gfx_begin_window(ALIGN_BOTTOM | align_info(), 0, 2, 26, 1, 0);
+    gfx_begin_window(ALIGN_BOTTOM | align_info(), 2, 2, 24, 1, 0);
     gfx_textf_aligned(ALIGN_LEFT, "MiSTer Laggy %s/%06u", FIRMWARE_VERSION, *core_version);
     gfx_end_window();
 }
@@ -516,11 +532,12 @@ void set_palette()
     /* Misterkun */
     palette_ram[0x40] = RGB(0,0,0);
     palette_ram[0x41] = RGB(8,8,8);
-    palette_ram[0x42] = RGB(180,180,180);
-    palette_ram[0x43] = RGB(255,119,175);
-    palette_ram[0x44] = RGB(233,141,184);
-    palette_ram[0x45] = RGB(240,239,239);
+    palette_ram[0x42] = RGB(187,187,187);
+    palette_ram[0x43] = RGB(232,126,182);
+    palette_ram[0x44] = RGB(240,148,191);
+    palette_ram[0x45] = RGB(247,246,246);
     palette_ram[0x46] = RGB(255,255,255);
+    palette_ram[0x47] = RGB(52,52,72);
 
     palette_ram[0x80] = RGB(0,0,0);
 }
